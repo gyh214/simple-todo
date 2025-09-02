@@ -440,6 +440,15 @@ class AsyncTodoManager:
             
             return deleted_count
     
+    def clear_completed_todos(self) -> int:
+        """
+        완료된 모든 TODO 항목을 삭제 (UI 호환성을 위한 래퍼 메서드)
+        
+        Returns:
+            삭제된 항목의 수
+        """
+        return self.clear_completed()
+    
     def get_stats(self) -> Dict[str, int]:
         """TODO 항목 통계 조회"""
         with self._lock:

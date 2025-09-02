@@ -9,6 +9,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, font
 import json
 import os
+import re
+import webbrowser
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable
 from tooltip import ToolTip
@@ -61,40 +63,46 @@ class ThemeManager:
     
     def _setup_themes(self):
         """테마 스타일 설정"""
-        # 라이트 테마 색상
+        # 라이트 테마 색상 (Magic UI 스타일)
         self.light_colors = {
             'bg': '#ffffff',
-            'bg_secondary': '#f8f9fa',
-            'bg_hover': '#e9ecef',
-            'text': '#212529',
-            'text_secondary': '#6c757d',
-            'border': '#dee2e6',
-            'accent': '#0d6efd',
-            'success': '#198754',
-            'danger': '#dc3545',
-            'warning': '#ffc107',
-            'button_bg': '#e9ecef',
-            'button_hover': '#dee2e6',
+            'bg_secondary': '#fafafa',
+            'bg_hover': '#f4f4f5',
+            'text': '#09090b',
+            'text_secondary': '#71717a',
+            'border': '#e4e4e7',
+            'accent': '#3b82f6',
+            'accent_hover': '#2563eb',
+            'success': '#10b981',
+            'danger': '#ef4444',
+            'warning': '#f59e0b',
+            'button_bg': '#f4f4f5',
+            'button_hover': '#e4e4e7',
             'entry_bg': '#ffffff',
-            'entry_border': '#ced4da'
+            'entry_border': '#d4d4d8',
+            'gradient_start': '#3b82f6',
+            'gradient_end': '#8b5cf6'
         }
         
-        # 다크 테마 색상
+        # 다크 테마 색상 (Magic UI 스타일)
         self.dark_colors = {
-            'bg': '#1e1e1e',
-            'bg_secondary': '#2d2d30',
-            'bg_hover': '#3e3e42',
+            'bg': '#0a0a0a',
+            'bg_secondary': '#141414',
+            'bg_hover': '#1a1a1a',
             'text': '#ffffff',
-            'text_secondary': '#cccccc',
-            'border': '#3e3e42',
-            'accent': '#007acc',
-            'success': '#4caf50',
-            'danger': '#f44336',
-            'warning': '#ff9800',
-            'button_bg': '#3e3e42',
-            'button_hover': '#525252',
-            'entry_bg': '#2d2d30',
-            'entry_border': '#525252'
+            'text_secondary': '#a1a1aa',
+            'border': '#27272a',
+            'accent': '#3b82f6',  # 더 생생한 파란색
+            'accent_hover': '#2563eb',
+            'success': '#10b981',
+            'danger': '#ef4444',
+            'warning': '#f59e0b',
+            'button_bg': '#18181b',
+            'button_hover': '#27272a',
+            'entry_bg': '#09090b',
+            'entry_border': '#27272a',
+            'gradient_start': '#3b82f6',
+            'gradient_end': '#8b5cf6'
         }
     
     def apply_theme(self, is_dark: bool):
@@ -151,7 +159,12 @@ class ThemeManager:
                            foreground='#ffffff',
                            borderwidth=0,
                            focuscolor='none',
-                           font=('Segoe UI', 9, 'bold'))
+                           font=('Segoe UI', 9, 'bold'),
+                           relief='flat')
+        
+        self.style.map('Accent.TButton',
+                      background=[('active', colors.get('accent_hover', colors['accent'])),
+                                ('pressed', colors['accent'])])
         
         self.style.configure('Danger.TButton',
                            background=colors['danger'],
@@ -262,11 +275,151 @@ class DragDropMixin:
         self.drag_widget = None
 
 
+class ClickableTextWidget(tk.Frame):
+    """클릭 가능한 URL이 포함된 텍스트를 표시하는 위젯"""
+    
+    def __init__(self, parent, text_content: str, theme_manager, font_info=('Segoe UI', 9), 
+                 anchor='w', justify='left', debug: bool = False):
+        super().__init__(parent)
+        
+        self.text_content = text_content
+        self.theme_manager = theme_manager
+        self.font_info = font_info
+        self.anchor = anchor
+        self.justify = justify
+        self._debug = debug
+        
+        # URL 패턴 (http, https, www로 시작하는 URL들)
+        self.url_pattern = re.compile(r'https?://[^\s]+|www\.[^\s]+')
+        
+        self._setup_widget()
+        self._setup_clickable_text()
+    
+    def _setup_widget(self):
+        """위젯 UI 설정"""
+        colors = self.theme_manager.get_colors()
+        
+        # Text 위젯 생성 (읽기 전용)
+        self.text_widget = tk.Text(
+            self, 
+            height=1,  # 한 줄로 제한
+            wrap='word',
+            bg=colors['bg_secondary'],
+            fg=colors['text'],
+            font=self.font_info,
+            relief='flat',
+            borderwidth=0,
+            highlightthickness=0,
+            cursor='arrow',
+            state='disabled',  # 편집 불가
+            takefocus=0  # 포커스 받지 않음
+        )
+        self.text_widget.pack(fill='x', expand=True)
+        
+        # 스크롤바 제거를 위해 크기 조정
+        self.text_widget.configure(height=1)
+    
+    def _setup_clickable_text(self):
+        """텍스트에서 URL을 찾아 클릭 가능하게 만들기"""
+        colors = self.theme_manager.get_colors()
+        
+        # Text 위젯을 편집 가능하게 임시 변경
+        self.text_widget.configure(state='normal')
+        
+        # 기존 내용 삭제
+        self.text_widget.delete('1.0', tk.END)
+        
+        # 텍스트 삽입
+        self.text_widget.insert('1.0', self.text_content)
+        
+        # URL 패턴 검색
+        urls = list(self.url_pattern.finditer(self.text_content))
+        
+        if self._debug:
+            print(f"[DEBUG] 텍스트에서 {len(urls)}개 URL 발견: {self.text_content}")
+        
+        # 각 URL에 태그 적용
+        for i, match in enumerate(urls):
+            start_pos = f"1.{match.start()}"
+            end_pos = f"1.{match.end()}"
+            tag_name = f"url_{i}"
+            url = match.group()
+            
+            # URL에 태그 적용
+            self.text_widget.tag_add(tag_name, start_pos, end_pos)
+            
+            # URL 스타일링
+            self.text_widget.tag_configure(
+                tag_name,
+                foreground=colors['accent'],
+                underline=True,
+                font=self.font_info + ('underline',)
+            )
+            
+            # 클릭 이벤트 바인딩
+            self.text_widget.tag_bind(
+                tag_name, 
+                "<Button-1>", 
+                lambda e, link=url: self._open_url(link)
+            )
+            
+            # 마우스 호버 효과
+            self.text_widget.tag_bind(
+                tag_name,
+                "<Enter>",
+                lambda e: self.text_widget.configure(cursor='hand2')
+            )
+            
+            self.text_widget.tag_bind(
+                tag_name,
+                "<Leave>",
+                lambda e: self.text_widget.configure(cursor='arrow')
+            )
+            
+            if self._debug:
+                print(f"[DEBUG] URL 태그 생성: {tag_name} = {url}")
+        
+        # 다시 읽기 전용으로 변경
+        self.text_widget.configure(state='disabled')
+    
+    def _open_url(self, url: str):
+        """URL을 기본 브라우저에서 열기"""
+        try:
+            # www로 시작하는 경우 http:// 추가
+            if url.startswith('www.'):
+                url = 'http://' + url
+            
+            webbrowser.open(url)
+            
+            if self._debug:
+                print(f"[DEBUG] URL 열기: {url}")
+                
+        except Exception as e:
+            if self._debug:
+                print(f"[DEBUG] URL 열기 실패: {e}")
+            messagebox.showerror("링크 오류", f"링크를 열 수 없습니다: {url}\n\n오류: {e}")
+    
+    def update_text(self, new_text: str):
+        """텍스트 내용 업데이트"""
+        self.text_content = new_text
+        self._setup_clickable_text()
+    
+    def configure_colors(self):
+        """테마 색상 업데이트"""
+        colors = self.theme_manager.get_colors()
+        self.text_widget.configure(
+            bg=colors['bg_secondary'],
+            fg=colors['text']
+        )
+        # URL 태그들도 새 색상으로 업데이트
+        self._setup_clickable_text()
+
+
 class TodoItemWidget(tk.Frame, DragDropMixin):
     """개별 TODO 항목을 표시하는 위젯"""
     
     def __init__(self, parent, todo_data: Dict[str, Any], theme_manager: ThemeManager,
-                 on_update: Callable, on_delete: Callable, on_reorder: Callable):
+                 on_update: Callable, on_delete: Callable, on_reorder: Callable, debug: bool = False):
         tk.Frame.__init__(self, parent)
         DragDropMixin.__init__(self)
         
@@ -275,6 +428,7 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         self.on_update = on_update
         self.on_delete = on_delete
         self.on_reorder = on_reorder
+        self._debug = debug
         
         self.is_editing = False
         self.edit_entry = None
@@ -286,21 +440,23 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         """위젯 UI 설정"""
         colors = self.theme_manager.get_colors()
         
-        # 메인 프레임 설정
+        # 메인 프레임 설정 (Magic UI 카드 스타일)
         self.configure(bg=colors['bg_secondary'], 
-                      relief='flat', 
+                      relief='solid', 
                       borderwidth=1,
-                      highlightthickness=0)
+                      highlightthickness=1,
+                      highlightcolor=colors['border'],
+                      highlightbackground=colors['border'])
         
         # 좌측: 드래그 핸들
         self.drag_handle = tk.Label(self, 
                                    text='☰',
-                                   font=('Segoe UI', 10),
+                                   font=('Segoe UI', 9),
                                    bg=colors['bg_secondary'],
                                    fg=colors['text_secondary'],
-                                   width=2,
+                                   width=1.5,
                                    cursor='hand2')
-        self.drag_handle.pack(side=tk.LEFT, padx=(8, 4), pady=8)
+        self.drag_handle.pack(side=tk.LEFT, padx=(4, 2), pady=3)
         ToolTip(self.drag_handle, "드래그하여 순서 변경")
         
         # 체크박스
@@ -312,47 +468,54 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
                                       fg=colors['text'],
                                       selectcolor=colors['bg_secondary'],
                                       activebackground=colors['bg_hover'],
-                                      font=('Segoe UI', 9))
-        self.checkbox.pack(side=tk.LEFT, padx=(0, 8), pady=8)
+                                      font=('Segoe UI', 8.5))
+        self.checkbox.pack(side=tk.LEFT, padx=(0, 4), pady=3)
         ToolTip(self.checkbox, "완료 표시")
         
         # 우측: 삭제 버튼
         self.delete_btn = tk.Button(self,
                                    text='✕',
-                                   font=('Segoe UI', 10),
+                                   font=('Segoe UI', 9),
                                    bg=colors['danger'],
                                    fg='white',
                                    border=0,
-                                   width=2,
-                                   height=1,
+                                   width=1.5,
+                                   height=0.8,
                                    command=self._delete_todo,
-                                   cursor='hand2')
-        self.delete_btn.pack(side=tk.RIGHT, padx=(4, 8), pady=8)
+                                   cursor='hand2',
+                                   relief='flat',
+                                   activebackground='#dc2626')
+        self.delete_btn.pack(side=tk.RIGHT, padx=(2, 4), pady=3)
         ToolTip(self.delete_btn, "삭제")
         
-        # 편집 버튼
+        # 편집 버튼 (Magic UI 스타일)
         self.edit_btn = tk.Button(self,
                                  text='✎',
-                                 font=('Segoe UI', 10),
+                                 font=('Segoe UI', 9),
                                  bg=colors['accent'],
                                  fg='white',
                                  border=0,
-                                 width=2,
-                                 height=1,
+                                 width=1.5,
+                                 height=0.8,
                                  command=self._start_edit,
-                                 cursor='hand2')
-        self.edit_btn.pack(side=tk.RIGHT, padx=(4, 0), pady=8)
+                                 cursor='hand2',
+                                 relief='flat',
+                                 activebackground=colors.get('accent_hover', colors['accent']))
+        self.edit_btn.pack(side=tk.RIGHT, padx=(2, 0), pady=3)
         ToolTip(self.edit_btn, "편집 (더블클릭도 가능)")
         
-        # 텍스트 레이블
-        self.text_label = tk.Label(self,
-                                  text=self.todo_data['text'],
-                                  font=('Segoe UI', 9),
-                                  bg=colors['bg_secondary'],
-                                  fg=colors['text'],
-                                  anchor='w',
-                                  justify='left')
-        self.text_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8), pady=8)
+        # 클릭 가능한 텍스트 위젯 (URL 링크 지원)
+        self.text_widget = ClickableTextWidget(
+            self,
+            self.todo_data['text'],
+            self.theme_manager,
+            font_info=('Segoe UI', 8.5),
+            debug=self._debug
+        )
+        self.text_widget.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4), pady=3)
+        
+        # 호환성을 위해 text_label 참조 유지
+        self.text_label = self.text_widget
         
         # 완료 상태에 따른 스타일 적용
         self._update_completion_style()
@@ -362,28 +525,34 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
     
     def _setup_events(self):
         """이벤트 설정"""
-        # 더블클릭으로 편집 모드
-        self.text_label.bind('<Double-Button-1>', lambda e: self._start_edit())
+        # 더블클릭으로 편집 모드 (ClickableTextWidget의 text_widget에 바인딩)
+        self.text_widget.text_widget.bind('<Double-Button-1>', lambda e: self._start_edit())
         
         # 호버 효과
-        widgets = [self, self.text_label, self.checkbox]
+        widgets = [self, self.text_widget, self.checkbox]
         for widget in widgets:
             widget.bind('<Enter>', self._on_enter)
             widget.bind('<Leave>', self._on_leave)
     
     def _on_enter(self, event):
-        """마우스 호버 시"""
+        """마우스 호버 시 (Magic UI elevation 효과)"""
         colors = self.theme_manager.get_colors()
-        self.configure(bg=colors['bg_hover'])
-        self.text_label.configure(bg=colors['bg_hover'])
+        # 배경색 변경
+        self.configure(bg=colors['bg_hover'], 
+                      highlightcolor=colors['accent'],
+                      highlightbackground=colors['accent'],
+                      relief='solid')
+        self.text_widget.text_widget.configure(bg=colors['bg_hover'])
         self.checkbox.configure(bg=colors['bg_hover'])
         self.drag_handle.configure(bg=colors['bg_hover'])
     
     def _on_leave(self, event):
         """마우스 호버 해제 시"""
         colors = self.theme_manager.get_colors()
-        self.configure(bg=colors['bg_secondary'])
-        self.text_label.configure(bg=colors['bg_secondary'])
+        self.configure(bg=colors['bg_secondary'],
+                      highlightcolor=colors['border'],
+                      highlightbackground=colors['border'])
+        self.text_widget.text_widget.configure(bg=colors['bg_secondary'])
         self.checkbox.configure(bg=colors['bg_secondary'])
         self.drag_handle.configure(bg=colors['bg_secondary'])
     
@@ -399,16 +568,22 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         colors = self.theme_manager.get_colors()
         if self.todo_data['completed']:
             # 완료된 항목: 취소선과 흐린 텍스트
-            self.text_label.configure(
-                fg=colors['text_secondary'],
-                font=('Segoe UI', 9, 'overstrike')
+            self.text_widget.text_widget.configure(
+                fg=colors['text_secondary']
             )
+            # 취소선은 Text 위젯의 폰트 설정으로 적용
+            self.text_widget.font_info = ('Segoe UI', 8.5, 'overstrike')
+            self.text_widget.text_widget.configure(font=self.text_widget.font_info)
         else:
             # 미완료 항목: 일반 스타일
-            self.text_label.configure(
-                fg=colors['text'],
-                font=('Segoe UI', 9)
+            self.text_widget.text_widget.configure(
+                fg=colors['text']
             )
+            self.text_widget.font_info = ('Segoe UI', 8.5)
+            self.text_widget.text_widget.configure(font=self.text_widget.font_info)
+        
+        # URL 스타일도 다시 적용
+        self.text_widget._setup_clickable_text()
     
     def _start_edit(self):
         """편집 모드 시작"""
@@ -418,17 +593,17 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         self.is_editing = True
         colors = self.theme_manager.get_colors()
         
-        # 기존 레이블 숨기기
-        self.text_label.pack_forget()
+        # 기존 텍스트 위젯 숨기기
+        self.text_widget.pack_forget()
         
         # 편집용 Entry 생성
         self.edit_entry = tk.Entry(self,
-                                  font=('Segoe UI', 9),
+                                  font=('Segoe UI', 8.5),
                                   bg=colors['entry_bg'],
                                   fg=colors['text'],
                                   borderwidth=1,
                                   relief='solid')
-        self.edit_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8), pady=8)
+        self.edit_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4), pady=3)
         
         # 기존 텍스트 설정 및 선택
         self.edit_entry.insert(0, self.todo_data['text'])
@@ -449,7 +624,8 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         
         if new_text and new_text != self.todo_data['text']:
             self.todo_data['text'] = new_text
-            self.text_label.configure(text=new_text)
+            # 텍스트 위젯 내용 업데이트 (URL 감지 포함)
+            self.text_widget.update_text(new_text)
             self.on_update(self.todo_data['id'], text=new_text)
         
         self._end_edit()
@@ -465,17 +641,37 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         
         self.is_editing = False
         
-        # Entry 제거하고 레이블 복원
+        # Entry 제거하고 텍스트 위젯 복원
         if self.edit_entry:
             self.edit_entry.destroy()
             self.edit_entry = None
         
-        self.text_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8), pady=8)
+        self.text_widget.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4), pady=3)
     
     def _delete_todo(self):
         """TODO 항목 삭제"""
-        # 확인 메시지 없이 바로 삭제
-        self.on_delete(self.todo_data['id'])
+        # 완료된 항목과 미완료 항목에 대해 다른 확인 메시지 표시
+        if self.todo_data['completed']:
+            # 완료된 항목: 간단한 확인
+            confirm = messagebox.askyesno("완료된 할일 삭제", 
+                                        f"완료된 할일을 삭제하시겠습니까?\n\n'{self.todo_data['text'][:50]}...' ",
+                                        parent=self.winfo_toplevel())
+        else:
+            # 미완료 항목: 더 강한 경고
+            confirm = messagebox.askyesno("중요한 할일 삭제", 
+                                        f"⚠️ 미완료 할일을 삭제하시겠습니까?\n\n'{self.todo_data['text'][:50]}...'\n\n삭제 후 복구할 수 없습니다.",
+                                        parent=self.winfo_toplevel(),
+                                        icon='warning')
+        
+        if confirm:
+            try:
+                self.on_delete(self.todo_data['id'])
+            except Exception as e:
+                messagebox.showerror("삭제 오류", f"항목 삭제 중 오류가 발생했습니다: {e}")
+                if self._debug:
+                    print(f"[DEBUG] 삭제 오류: {e}")
+                    import traceback
+                    traceback.print_exc()
     
     def _handle_reorder(self, widget, move_steps):
         """드래그 앤 드롭으로 순서 변경"""
@@ -485,7 +681,7 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
     def update_data(self, todo_data: Dict[str, Any]):
         """TODO 데이터 업데이트"""
         self.todo_data = todo_data
-        self.text_label.configure(text=todo_data['text'])
+        self.text_widget.update_text(todo_data['text'])
         self.check_var.set(todo_data['completed'])
         self._update_completion_style()
 
@@ -598,7 +794,7 @@ class TodoPanelApp:
         self.entry_var = tk.StringVar()
         self.todo_entry = ttk.Entry(input_frame,
                                    textvariable=self.entry_var,
-                                   font=('Segoe UI', 10),
+                                   font=('Segoe UI', 9),
                                    style='Modern.TEntry')
         self.todo_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
         
@@ -719,9 +915,10 @@ class TodoPanelApp:
             self.theme_manager,
             self._update_todo,
             self._delete_todo,
-            self._reorder_todo
+            self._reorder_todo,
+            debug=getattr(self.todo_manager, '_debug', False)
         )
-        widget.pack(fill=tk.X, pady=2)
+        widget.pack(fill=tk.X, pady=1)
         self.todo_widgets[todo_data['id']] = widget
     
     def _add_todo(self):
@@ -766,19 +963,50 @@ class TodoPanelApp:
     
     def _delete_todo(self, todo_id: str):
         """TODO 삭제"""
+        debug_mode = getattr(self.todo_manager, '_debug', False)
+        if debug_mode:
+            print(f"[DEBUG] 삭제 요청: todo_id={todo_id}")
+            
         try:
+            # todo_id 유효성 검사
+            if not todo_id or todo_id not in self.todo_widgets:
+                raise ValueError(f"유효하지 않은 todo_id: {todo_id}")
+            
             success = self.todo_manager.delete_todo(todo_id)
+            if debug_mode:
+                print(f"[DEBUG] todo_manager.delete_todo() 결과: {success}")
+                
             if success:
+                # UI에서 위젯 제거
                 if todo_id in self.todo_widgets:
                     self.todo_widgets[todo_id].destroy()
                     del self.todo_widgets[todo_id]
+                    if debug_mode:
+                        print(f"[DEBUG] 위젯 제거 완료: {todo_id}")
                 
                 self._update_status()
+                if debug_mode:
+                    print(f"[DEBUG] 상태 업데이트 완료")
             else:
-                messagebox.showerror("오류", "TODO 삭제에 실패했습니다.")
+                error_msg = f"TODO 삭제에 실패했습니다. (ID: {todo_id})"
+                messagebox.showerror("삭제 실패", error_msg)
+                if debug_mode:
+                    print(f"[DEBUG] {error_msg}")
                 
         except TodoManagerError as e:
-            messagebox.showerror("오류", f"TODO 삭제에 실패했습니다: {e}")
+            error_msg = f"TODO 삭제 중 오류 발생: {e}"
+            messagebox.showerror("삭제 오류", error_msg)
+            if debug_mode:
+                print(f"[DEBUG] TodoManagerError: {e}")
+                import traceback
+                traceback.print_exc()
+        except Exception as e:
+            error_msg = f"예상치 못한 오류 발생: {e}"
+            messagebox.showerror("시스템 오류", error_msg)
+            if debug_mode:
+                print(f"[DEBUG] Unexpected error: {e}")
+                import traceback
+                traceback.print_exc()
     
     def _reorder_todo(self, todo_id: str, move_steps: int):
         """TODO 순서 변경"""

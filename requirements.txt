@@ -1,0 +1,16 @@
+# Windows TODO Panel App Requirements
+# 
+# Core GUI and System Integration
+pystray==0.19.5         # System tray integration
+Pillow>=10.0.0          # Image processing for tray icon
+psutil>=5.9.0           # Process management for single instance
+
+# Built-in modules used (no installation required):
+# - tkinter (GUI framework)
+# - json (data serialization)
+# - uuid (unique ID generation)  
+# - pathlib (path handling)
+# - threading (thread safety)
+# - datetime (timestamp management)
+# - logging (application logging)
+# - os, sys (system operations)

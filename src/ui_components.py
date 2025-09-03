@@ -11,6 +11,7 @@ import json
 import os
 import re
 import webbrowser
+import socket
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable
 from tooltip import ToolTip
@@ -235,6 +236,25 @@ class ClickableTextWidget(tk.Frame):
         # URL 패턴 (http, https, www로 시작하는 URL들)
         self.url_pattern = re.compile(r'https?://[^\s]+|www\.[^\s]+')
         
+        # 파일 경로 패턴들 (확장자가 있는 경로)
+        self.file_patterns = {
+            'absolute': re.compile(r'[A-Za-z]:[\\\/](?:[^\\\/\n\r<>"|*?]+[\\\/])*[^\\\/\n\r<>"|*?]+\.[A-Za-z0-9]{1,10}'),
+            'relative': re.compile(r'(?:\.{1,2}[\\\/])+(?:[^\\\/\n\r<>"|*?]+[\\\/])*[^\\\/\n\r<>"|*?]+\.[A-Za-z0-9]{1,10}'),
+            'network': re.compile(r'\\\\[^\\\/\n\r<>"|*?]+\\(?:[^\\\/\n\r<>"|*?]+\\)*[^\\\/\n\r<>"|*?]+\.[A-Za-z0-9]{1,10}')
+        }
+        
+        # 폴더 경로 패턴들 (확장자가 없는 경로)
+        self.folder_patterns = {
+            # 슬래시로 끝나는 명확한 폴더 경로
+            'trailing_slash_absolute': re.compile(r'[A-Za-z]:[\\\/](?:[^\\\/\n\r<>"|*?]+[\\\/])+'),
+            'trailing_slash_relative': re.compile(r'(?:\.{0,2}[\\\/])+(?:[^\\\/\n\r<>"|*?]+[\\\/])+'),
+            'trailing_slash_network': re.compile(r'\\\\[^\\\/\n\r<>"|*?]+\\(?:[^\\\/\n\r<>"|*?]+[\\\/])+'),
+            # 확장자 없는 경로 (추정 폴더)
+            'no_extension_absolute': re.compile(r'[A-Za-z]:[\\\/](?:[^\\\/\n\r<>"|*?]+[\\\/])*[^\\\/\n\r<>"|*?]+(?!\.[A-Za-z0-9])'),
+            'no_extension_relative': re.compile(r'(?:\.{1,2}[\\\/])+(?:[^\\\/\n\r<>"|*?]+[\\\/])*[^\\\/\n\r<>"|*?]+(?!\.[A-Za-z0-9])'),
+            'no_extension_network': re.compile(r'\\\\[^\\\/\n\r<>"|*?]+\\(?:[^\\\/\n\r<>"|*?]+[\\\/])*[^\\\/\n\r<>"|*?]+(?!\.[A-Za-z0-9])')
+        }
+        
         self._setup_widget()
         self._setup_clickable_text()
     
@@ -260,8 +280,62 @@ class ClickableTextWidget(tk.Frame):
         self.text_widget.pack(fill='x', expand=True)
     
     
+    def _get_link_type_and_matches(self, text):
+        """텍스트에서 URL, 파일 경로, 폴더 경로를 찾아 타입과 함께 반환"""
+        matches = []
+        
+        # 1. URL 패턴 검색 (최우선)
+        for match in self.url_pattern.finditer(text):
+            matches.append({
+                'match': match,
+                'type': 'url',
+                'content': match.group()
+            })
+        
+        # 2. 파일 경로 패턴 검색 (확장자가 있는 경로)
+        for pattern_name, pattern in self.file_patterns.items():
+            for match in pattern.finditer(text):
+                # 기존 매치와 겹치지 않는지 확인
+                is_overlap = False
+                for existing_match in matches:
+                    if (match.start() < existing_match['match'].end() and 
+                        match.end() > existing_match['match'].start()):
+                        is_overlap = True
+                        break
+                
+                if not is_overlap:
+                    matches.append({
+                        'match': match,
+                        'type': 'file',
+                        'content': match.group(),
+                        'pattern_type': pattern_name
+                    })
+        
+        # 3. 폴더 경로 패턴 검색 (확장자가 없는 경로)
+        for pattern_name, pattern in self.folder_patterns.items():
+            for match in pattern.finditer(text):
+                # 기존 매치와 겹치지 않는지 확인
+                is_overlap = False
+                for existing_match in matches:
+                    if (match.start() < existing_match['match'].end() and 
+                        match.end() > existing_match['match'].start()):
+                        is_overlap = True
+                        break
+                
+                if not is_overlap:
+                    matches.append({
+                        'match': match,
+                        'type': 'folder',
+                        'content': match.group(),
+                        'pattern_type': pattern_name
+                    })
+        
+        # 시작 위치로 정렬
+        matches.sort(key=lambda x: x['match'].start())
+        return matches
+    
     def _setup_clickable_text(self):
-        """텍스트에서 URL을 찾아 클릭 가능하게 만들기"""
+        """텍스트에서 URL과 파일 경로를 찾아 클릭 가능하게 만들기"""
         colors = self.theme_manager.get_colors()
         
         # Text 위젯을 편집 가능하게 임시 변경
@@ -273,36 +347,59 @@ class ClickableTextWidget(tk.Frame):
         # 텍스트 삽입
         self.text_widget.insert('1.0', self.text_content)
         
-        # URL 패턴 검색
-        urls = list(self.url_pattern.finditer(self.text_content))
+        # URL과 파일 경로 검색
+        all_matches = self._get_link_type_and_matches(self.text_content)
         
         if self._debug:
-            print(f"[DEBUG] 텍스트에서 {len(urls)}개 URL 발견: {self.text_content}")
+            try:
+                print(f"[DEBUG] 텍스트에서 {len(all_matches)}개 링크 발견: {self.text_content}")
+            except UnicodeEncodeError:
+                print(f"[DEBUG] Found {len(all_matches)} links in text (encoding issue prevented full display)")
         
-        # 각 URL에 태그 적용
-        for i, match in enumerate(urls):
+        # 각 링크에 태그 적용
+        for i, link_info in enumerate(all_matches):
+            match = link_info['match']
+            link_type = link_info['type']
+            content = link_info['content']
+            
             start_pos = f"1.{match.start()}"
             end_pos = f"1.{match.end()}"
-            tag_name = f"url_{i}"
-            url = match.group()
+            tag_name = f"{link_type}_{i}"
             
-            # URL에 태그 적용
+            # 링크에 태그 적용
             self.text_widget.tag_add(tag_name, start_pos, end_pos)
             
-            # URL 스타일링
+            # 링크 타입에 따른 스타일링
+            if link_type == 'url':
+                # 웹 링크: 파란색
+                color = colors['accent']
+                tooltip_text = f"웹사이트 열기: {content}"
+                click_handler = lambda e, link=content: self._open_url(link)
+            elif link_type == 'file':
+                # 파일 링크: 주황색
+                color = colors.get('warning', '#ff9800')
+                tooltip_text = f"파일 열기: {content}"
+                click_handler = lambda e, path=content: self._open_file(path)
+            elif link_type == 'folder':
+                # 폴더 링크: 녹색
+                color = colors.get('success', '#4caf50')
+                tooltip_text = f"폴더 열기: {content}"
+                click_handler = lambda e, path=content: self._open_folder(path)
+            else:
+                # 기본값 (예상치 못한 케이스)
+                color = colors.get('text_secondary', '#cccccc')
+                tooltip_text = f"링크: {content}"
+                click_handler = lambda e: None
+            
             self.text_widget.tag_configure(
                 tag_name,
-                foreground=colors['accent'],
+                foreground=color,
                 underline=True,
                 font=self.font_info + ('underline',)
             )
             
             # 클릭 이벤트 바인딩
-            self.text_widget.tag_bind(
-                tag_name, 
-                "<Button-1>", 
-                lambda e, link=url: self._open_url(link)
-            )
+            self.text_widget.tag_bind(tag_name, "<Button-1>", click_handler)
             
             # 마우스 호버 효과
             self.text_widget.tag_bind(
@@ -317,8 +414,14 @@ class ClickableTextWidget(tk.Frame):
                 lambda e: self.text_widget.configure(cursor='arrow')
             )
             
+            # 툴팁 추가
+            self._add_tooltip_to_tag(tag_name, tooltip_text)
+            
             if self._debug:
-                print(f"[DEBUG] URL 태그 생성: {tag_name} = {url}")
+                try:
+                    print(f"[DEBUG] {link_type.upper()} 태그 생성: {tag_name} = {content}")
+                except UnicodeEncodeError:
+                    print(f"[DEBUG] {link_type.upper()} tag created: {tag_name}")
         
         # 다시 읽기 전용으로 변경 (높이는 이미 1로 고정)
         self.text_widget.configure(state='disabled')
@@ -334,18 +437,64 @@ class ClickableTextWidget(tk.Frame):
             fg=colors['text']
         )
         
-        # URL 태그 색상 업데이트
+        # 링크 태그 색상 업데이트
         for tag in self.text_widget.tag_names():
             if tag.startswith('url_'):
+                # 웹 링크: 파란색
                 self.text_widget.tag_configure(
                     tag,
                     foreground=colors['accent']
+                )
+            elif tag.startswith('file_'):
+                # 파일 링크: 주황색
+                self.text_widget.tag_configure(
+                    tag,
+                    foreground=colors.get('warning', '#ff9800')
+                )
+            elif tag.startswith('folder_'):
+                # 폴더 링크: 녹색
+                self.text_widget.tag_configure(
+                    tag,
+                    foreground=colors.get('success', '#4caf50')
                 )
     
     def update_text(self, new_text: str):
         """텍스트 내용 업데이트"""
         self.text_content = new_text
         self._setup_clickable_text()
+    
+    def _add_tooltip_to_tag(self, tag_name: str, tooltip_text: str):
+        """태그에 툴팁 추가"""
+        def show_tooltip(event):
+            # 툴팁 생성 (간단한 구현)
+            tooltip = tk.Toplevel()
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root + 10}+{event.y_root + 10}")
+            
+            colors = self.theme_manager.get_colors()
+            label = tk.Label(
+                tooltip,
+                text=tooltip_text,
+                background=colors.get('tooltip_bg', '#333333'),
+                foreground=colors.get('tooltip_fg', '#ffffff'),
+                font=('Segoe UI', 8),
+                relief='solid',
+                borderwidth=1,
+                padx=5,
+                pady=2
+            )
+            label.pack()
+            
+            # 일정 시간 후 툴팁 삭제
+            tooltip.after(3000, tooltip.destroy)
+            
+            # 마우스가 태그를 벗어나면 툴팁 삭제
+            def hide_tooltip(e):
+                tooltip.destroy()
+            
+            self.text_widget.tag_bind(tag_name, "<Leave>", hide_tooltip)
+        
+        self.text_widget.tag_bind(tag_name, "<Enter>", show_tooltip)
     
     def _open_url(self, url: str):
         """URL을 기본 브라우저에서 열기"""
@@ -357,12 +506,396 @@ class ClickableTextWidget(tk.Frame):
             webbrowser.open(url)
             
             if self._debug:
-                print(f"[DEBUG] URL 열기: {url}")
+                try:
+                    print(f"[DEBUG] URL 열기: {url}")
+                except UnicodeEncodeError:
+                    print(f"[DEBUG] Opening URL: {url}")
                 
         except Exception as e:
             if self._debug:
-                print(f"[DEBUG] URL 열기 실패: {e}")
+                try:
+                    print(f"[DEBUG] URL 열기 실패: {e}")
+                except UnicodeEncodeError:
+                    print(f"[DEBUG] Failed to open URL: {e}")
             messagebox.showerror("링크 오류", f"링크를 열 수 없습니다: {url}\n\n오류: {e}")
+    
+    def _open_file(self, file_path: str):
+        """보안 검증을 포함한 파일 열기"""
+        try:
+            # 1. 파일 경로를 Path 객체로 변환
+            file_path_obj = Path(file_path)
+            
+            # 2. 파일 존재 여부 검증
+            if not file_path_obj.exists():
+                error_msg = f"파일을 찾을 수 없습니다: {file_path}"
+                if self._debug:
+                    print(f"[DEBUG] {error_msg}")
+                messagebox.showerror("파일 오류", error_msg)
+                return
+            
+            # 3. 파일 확장자 추출 및 보안 검증
+            file_extension = file_path_obj.suffix.lower()
+            dangerous_extensions = {
+                '.exe', '.bat', '.cmd', '.scr', '.com', '.pif', 
+                '.msi', '.ps1', '.vbs', '.js', '.jar', '.app'
+            }
+            
+            # 4. 실행 파일 보안 확인 대화상자
+            if file_extension in dangerous_extensions:
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] 위험한 실행 파일 감지: {file_path} (확장자: {file_extension})")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] Dangerous executable detected: {file_path} (ext: {file_extension})")
+                
+                # 사용자 확인 대화상자
+                confirm_msg = (
+                    f"실행 파일을 열려고 합니다. 계속하시겠습니까?\n\n"
+                    f"파일: {file_path}\n"
+                    f"확장자: {file_extension}\n\n"
+                    f"⚠️ 신뢰할 수 없는 파일은 시스템에 해를 끼칠 수 있습니다."
+                )
+                
+                user_confirmed = messagebox.askyesno(
+                    "보안 확인", 
+                    confirm_msg,
+                    icon='warning',
+                    default='no'  # 기본값을 'No'로 설정하여 안전성 강화
+                )
+                
+                if not user_confirmed:
+                    if self._debug:
+                        try:
+                            print(f"[DEBUG] 사용자가 실행 파일 열기를 취소함: {file_path}")
+                        except UnicodeEncodeError:
+                            print(f"[DEBUG] User cancelled executable opening: {file_path}")
+                    return
+                
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] 사용자가 실행 파일 열기를 승인함: {file_path}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] User approved executable opening: {file_path}")
+            
+            # 5. 파일 접근 권한 검증 및 열기
+            try:
+                # Windows 환경에서 파일 열기
+                if os.name == 'nt':
+                    os.startfile(str(file_path_obj))
+                else:
+                    # 다른 OS의 경우 (향후 확장성을 위해)
+                    import subprocess
+                    subprocess.run(['xdg-open', str(file_path_obj)])
+                
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] 파일 열기 성공: {file_path}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] File opened successfully: {file_path}")
+                    
+            except PermissionError:
+                error_msg = f"파일에 접근할 수 없습니다: {file_path}"
+                if self._debug:
+                    print(f"[DEBUG] {error_msg} (권한 오류)")
+                messagebox.showerror("권한 오류", error_msg)
+                
+            except OSError as e:
+                # Windows의 os.startfile()에서 발생할 수 있는 특정 오류들
+                if e.winerror == 2:  # 파일을 찾을 수 없음
+                    error_msg = f"파일을 찾을 수 없습니다: {file_path}"
+                elif e.winerror == 5:  # 접근이 거부됨
+                    error_msg = f"파일에 접근할 수 없습니다: {file_path}"
+                else:
+                    error_msg = f"파일을 열 수 없습니다: {e}"
+                
+                if self._debug:
+                    print(f"[DEBUG] OSError: {error_msg} (winerror: {getattr(e, 'winerror', 'N/A')})")
+                messagebox.showerror("시스템 오류", error_msg)
+                
+        except Exception as e:
+            error_msg = f"파일을 열 수 없습니다: {e}"
+            if self._debug:
+                print(f"[DEBUG] 예상치 못한 오류: {error_msg}")
+                import traceback
+                traceback.print_exc()
+            messagebox.showerror("파일 오류", error_msg)
+    
+    def _is_safe_folder_path(self, folder_path_obj: Path) -> tuple[bool, str]:
+        """폴더 경로의 안전성을 검증
+        
+        Returns:
+            tuple: (is_safe: bool, warning_message: str)
+        """
+        try:
+            folder_path_str = str(folder_path_obj).lower()
+            
+            # 위험한 시스템 폴더들
+            dangerous_system_paths = {
+                'c:\\windows\\system32',
+                'c:\\windows\\syswow64',
+                'c:\\windows\\winsxs',
+                'c:\\windows\\boot',
+                'c:\\system volume information',
+                'c:\\recovery',
+                'c:\\$recycle.bin'
+            }
+            
+            # 민감한 프로그램 폴더들
+            sensitive_program_paths = {
+                'c:\\program files\\windows defender',
+                'c:\\program files (x86)\\windows defender',
+                'c:\\program files\\internet explorer',
+                'c:\\program files (x86)\\internet explorer',
+                'c:\\programdata\\microsoft\\windows defender'
+            }
+            
+            # 사용자 프로필의 민감한 폴더들
+            user_sensitive_paths = {
+                '\\appdata\\local\\microsoft\\credentials',
+                '\\appdata\\roaming\\microsoft\\credentials',
+                '\\ntuser.dat',
+                '\\cookies'
+            }
+            
+            # 1. 직접적인 위험한 시스템 경로 확인
+            for dangerous_path in dangerous_system_paths:
+                if folder_path_str == dangerous_path or folder_path_str.startswith(dangerous_path + '\\'):
+                    return False, f"시스템 폴더에 접근하려고 합니다: {folder_path_obj}\n\n⚠️ 이 폴더는 시스템에 중요한 파일들이 있어 수정 시 문제가 발생할 수 있습니다."
+            
+            # 2. 민감한 프로그램 폴더 확인 (경고만)
+            for sensitive_path in sensitive_program_paths:
+                if folder_path_str == sensitive_path or folder_path_str.startswith(sensitive_path + '\\'):
+                    return True, f"민감한 프로그램 폴더에 접근합니다: {folder_path_obj}\n\n⚠️ 이 폴더의 파일을 변경하지 마세요."
+            
+            # 3. 사용자 프로필 내 민감한 폴더 확인
+            for sensitive_pattern in user_sensitive_paths:
+                if sensitive_pattern in folder_path_str:
+                    return True, f"민감한 사용자 폴더에 접근합니다: {folder_path_obj}\n\n⚠️ 개인 정보가 포함될 수 있습니다."
+            
+            return True, ""  # 안전함
+            
+        except Exception as e:
+            if self._debug:
+                try:
+                    print(f"[DEBUG] 안전성 검증 중 오류: {e}")
+                except UnicodeEncodeError:
+                    print(f"[DEBUG] Error during safety check: {e}")
+            return True, ""  # 오류 시 허용 (보수적 접근)
+    
+    def _check_network_path_connectivity(self, folder_path_obj: Path) -> bool:
+        """네트워크 경로의 연결 상태를 확인
+        
+        Returns:
+            bool: 네트워크 경로가 연결 가능한지 여부
+        """
+        folder_path_str = str(folder_path_obj)
+        
+        # 네트워크 경로가 아니면 항상 True 반환
+        if not folder_path_str.startswith('\\\\'):
+            return True
+        
+        try:
+            # UNC 경로에서 서버 이름 추출
+            path_parts = folder_path_str.split('\\')
+            if len(path_parts) >= 4:  # \\server\share 형태
+                server_name = path_parts[2]
+                
+                # 서버 연결 테스트 (간단한 소켓 연결 시도)
+                try:
+                    # SMB 포트(445) 또는 NetBIOS 포트(139)에 연결 시도
+                    for port in [445, 139]:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(2)  # 2초 타임아웃
+                        result = sock.connect_ex((server_name, port))
+                        sock.close()
+                        if result == 0:
+                            return True
+                    return False
+                except:
+                    return False
+            return False
+        except Exception as e:
+            if self._debug:
+                try:
+                    print(f"[DEBUG] 네트워크 연결 확인 중 오류: {e}")
+                except UnicodeEncodeError:
+                    print(f"[DEBUG] Network connectivity check error: {e}")
+            return True  # 오류 시 허용
+    
+    def _safe_message_box(self, msg_type: str, title: str, message: str, **kwargs):
+        """한국어 인코딩 안전화된 메시지박스"""
+        try:
+            if msg_type == 'error':
+                return messagebox.showerror(title, message, **kwargs)
+            elif msg_type == 'warning':
+                return messagebox.showwarning(title, message, **kwargs)
+            elif msg_type == 'info':
+                return messagebox.showinfo(title, message, **kwargs)
+            elif msg_type == 'askyesno':
+                return messagebox.askyesno(title, message, **kwargs)
+            else:
+                return messagebox.showinfo(title, message, **kwargs)
+        except UnicodeEncodeError:
+            # 한국어 출력 실패 시 영어로 대체
+            try:
+                english_title = "Folder Access"
+                english_message = f"Cannot access folder: {Path(message.split(':')[-1].strip()) if ':' in message else 'Unknown path'}"
+                if msg_type == 'error':
+                    return messagebox.showerror(english_title, english_message, **kwargs)
+                elif msg_type == 'warning':
+                    return messagebox.showwarning(english_title, english_message, **kwargs)
+                elif msg_type == 'askyesno':
+                    return messagebox.askyesno(english_title, "Do you want to continue?", **kwargs)
+                else:
+                    return messagebox.showinfo(english_title, english_message, **kwargs)
+            except:
+                # 최종 대체안
+                return messagebox.showerror("Error", "Folder access error occurred.")
+    
+    def _open_folder(self, folder_path: str):
+        """강화된 보안 검증을 포함한 폴더 열기 - Windows 탐색기에서 폴더 열기"""
+        try:
+            # 1. 폴더 경로를 Path 객체로 변환
+            folder_path_obj = Path(folder_path)
+            
+            if self._debug:
+                try:
+                    print(f"[DEBUG] 폴더 열기 요청: {folder_path}")
+                except UnicodeEncodeError:
+                    print(f"[DEBUG] Folder open request: {folder_path}")
+            
+            # 2. 네트워크 경로 연결 상태 확인
+            if str(folder_path_obj).startswith('\\\\'):
+                if not self._check_network_path_connectivity(folder_path_obj):
+                    error_msg = f"네트워크 폴더에 연결할 수 없습니다: {folder_path}\n\n서버가 응답하지 않거나 네트워크 연결에 문제가 있습니다."
+                    if self._debug:
+                        try:
+                            print(f"[DEBUG] 네트워크 연결 실패: {folder_path}")
+                        except UnicodeEncodeError:
+                            print(f"[DEBUG] Network connection failed: {folder_path}")
+                    self._safe_message_box('error', '네트워크 오류', error_msg)
+                    return
+            
+            # 3. 폴더 존재 여부 검증
+            if not folder_path_obj.exists():
+                error_msg = f"폴더를 찾을 수 없습니다: {folder_path}"
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] {error_msg}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] Folder not found: {folder_path}")
+                self._safe_message_box('error', '폴더 오류', error_msg)
+                return
+            
+            # 4. 폴더인지 확인 (파일이 아닌지 검증)
+            if not folder_path_obj.is_dir():
+                error_msg = f"지정된 경로는 폴더가 아닙니다: {folder_path}"
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] {error_msg}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] Path is not a directory: {folder_path}")
+                self._safe_message_box('error', '경로 오류', error_msg)
+                return
+            
+            # 5. 폴더 안전성 검증
+            is_safe, warning_msg = self._is_safe_folder_path(folder_path_obj)
+            
+            if not is_safe:
+                # 위험한 시스템 폴더: 접근 금지
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] 위험한 시스템 폴더 접근 차단: {folder_path}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] Dangerous system folder access blocked: {folder_path}")
+                self._safe_message_box('error', '보안 경고', warning_msg)
+                return
+            elif warning_msg:
+                # 민감한 폴더: 사용자 확인 필요
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] 민감한 폴더 접근, 사용자 확인 요청: {folder_path}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] Sensitive folder access, user confirmation required: {folder_path}")
+                
+                user_confirmed = self._safe_message_box(
+                    'askyesno',
+                    '폴더 접근 확인',
+                    f"{warning_msg}\n\n그래도 폴더를 열기겠습니까?",
+                    icon='warning',
+                    default='no'
+                )
+                
+                if not user_confirmed:
+                    if self._debug:
+                        try:
+                            print(f"[DEBUG] 사용자가 민감한 폴더 접근을 취소함: {folder_path}")
+                        except UnicodeEncodeError:
+                            print(f"[DEBUG] User cancelled sensitive folder access: {folder_path}")
+                    return
+                
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] 사용자가 민감한 폴더 접근을 승인함: {folder_path}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] User approved sensitive folder access: {folder_path}")
+            
+            # 6. 폴더 접근 권한 검증 및 탐색기에서 열기
+            try:
+                # Windows 환경에서 폴더를 탐색기에서 열기
+                if os.name == 'nt':
+                    os.startfile(str(folder_path_obj))
+                else:
+                    # 다른 OS의 경우 (향후 확장성을 위해)
+                    import subprocess
+                    subprocess.run(['xdg-open', str(folder_path_obj)])
+                
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] 폴더 열기 성공: {folder_path}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] Folder opened successfully: {folder_path}")
+                    
+            except PermissionError:
+                error_msg = f"폴더에 접근할 수 없습니다: {folder_path}\n\n관리자 권한이 필요하거나 접근이 제한된 폴더입니다."
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] 권한 오류: {folder_path}")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] Permission denied: {folder_path}")
+                self._safe_message_box('error', '권한 오류', error_msg)
+                
+            except OSError as e:
+                # Windows의 os.startfile()에서 발생할 수 있는 특정 오류들
+                if hasattr(e, 'winerror'):
+                    if e.winerror == 2:  # 폴더를 찾을 수 없음
+                        error_msg = f"폴더를 찾을 수 없습니다: {folder_path}\n\n경로가 올바른지 확인해주세요."
+                    elif e.winerror == 5:  # 접근이 거부됨
+                        error_msg = f"폴더에 접근할 수 없습니다: {folder_path}\n\n접근 권한이 없거나 폴더가 사용 중입니다."
+                    elif e.winerror == 21:  # 장치가 준비되지 않음
+                        error_msg = f"네트워크 드라이브나 이동식 디스크를 사용할 수 없습니다: {folder_path}\n\n연결 상태를 확인해주세요."
+                    else:
+                        error_msg = f"폴더를 열 수 없습니다: {folder_path}\n\n시스템 오류: {e}"
+                else:
+                    error_msg = f"폴더를 열 수 없습니다: {folder_path}\n\n오류: {e}"
+                
+                if self._debug:
+                    try:
+                        print(f"[DEBUG] OSError: {error_msg} (winerror: {getattr(e, 'winerror', 'N/A')})")
+                    except UnicodeEncodeError:
+                        print(f"[DEBUG] OSError occurred: {getattr(e, 'winerror', 'N/A')}")
+                self._safe_message_box('error', '시스템 오류', error_msg)
+                
+        except Exception as e:
+            error_msg = f"폴더를 열 수 없습니다: {folder_path}\n\n예상치 못한 오류: {e}"
+            if self._debug:
+                try:
+                    print(f"[DEBUG] 예상치 못한 오류: {error_msg}")
+                except UnicodeEncodeError:
+                    print(f"[DEBUG] Unexpected error occurred")
+                import traceback
+                traceback.print_exc()
+            self._safe_message_box('error', '폴더 오류', error_msg)
     
     def update_text(self, new_text: str):
         """텍스트 내용 업데이트"""
@@ -376,7 +909,7 @@ class ClickableTextWidget(tk.Frame):
             bg=colors['bg_secondary'],
             fg=colors['text']
         )
-        # URL 태그들도 새 색상으로 업데이트
+        # 모든 링크 태그들(URL, 파일, 폴더)을 새 색상으로 업데이트
         self._setup_clickable_text()
 
 

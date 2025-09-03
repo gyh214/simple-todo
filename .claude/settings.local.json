@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "mcp__sequential-thinking__sequentialthinking_tools"
+      "mcp__sequential-thinking__sequentialthinking_tools",
+      "mcp__magicui__getUIComponents",
+      "mcp__magicui__getButtons",
+      "Read(C:\\Users\\gyh21\\.claude/**)"
     ],
     "deny": [],
     "ask": []

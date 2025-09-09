@@ -1286,6 +1286,15 @@ class TodoPanelApp:
         self.clear_btn.pack(side=tk.RIGHT, padx=(4, 0))
         ToolTip(self.clear_btn, "완료된 항목 모두 삭제")
         
+        # 정보 버튼
+        self.info_btn = ttk.Button(control_frame,
+                                  text='ⓘ',  # ⓘ기호
+                                  width=3,
+                                  command=self._show_about_dialog,
+                                  style='Modern.TButton')
+        self.info_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        ToolTip(self.info_btn, "개발자 정보 및 더 많은 도구들")
+        
         # 입력 필드 이벤트 설정
         # 엔터키로 추가
         self.todo_entry.bind('<Return>', lambda e: self._add_todo())
@@ -1557,6 +1566,113 @@ class TodoPanelApp:
         style = 'Accent.TButton' if self.always_on_top else 'Modern.TButton'
         self.top_btn.configure(style=style)
     
+    
+    def _show_about_dialog(self):
+        """정보 대화상자 표시"""
+        try:
+            about_window = tk.Toplevel(self.root)
+            about_window.title("TODO Panel 정보")
+            about_window.geometry("400x300")
+            about_window.resizable(False, False)
+            about_window.transient(self.root)
+            about_window.grab_set()
+            
+            # 색상 테마 설정
+            colors = self.theme_manager.get_colors()
+            about_window.configure(bg=colors['bg'])
+            
+            # 중앙 정렬
+            x = (about_window.winfo_screenwidth() // 2) - 200
+            y = (about_window.winfo_screenheight() // 2) - 150
+            about_window.geometry(f"400x300+{x}+{y}")
+            
+            # 메인 프레임
+            main_frame = ttk.Frame(about_window, style='Main.TFrame')
+            main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+            
+            # 제목
+            title_label = ttk.Label(main_frame,
+                                   text="📝 TODO Panel",
+                                   font=('Segoe UI', 16, 'bold'),
+                                   style='Main.TLabel')
+            title_label.pack(pady=(0, 10))
+            
+            # 버전 정보
+            version_label = ttk.Label(main_frame,
+                                     text="Windows 데스크탑 TODO 관리 도구",
+                                     font=('Segoe UI', 10),
+                                     style='Secondary.TLabel')
+            version_label.pack(pady=(0, 20))
+            
+            # 개발자 정보
+            dev_frame = ttk.Frame(main_frame, style='Main.TFrame')
+            dev_frame.pack(fill=tk.X, pady=(0, 20))
+            
+            dev_label = ttk.Label(dev_frame,
+                                 text="개발자: kochim.com 팀",
+                                 font=('Segoe UI', 10),
+                                 style='Main.TLabel')
+            dev_label.pack()
+            
+            # 추가 도구 안내
+            tools_label = ttk.Label(main_frame,
+                                   text="더 많은 유용한 도구들을 찾고 계신가요?",
+                                   font=('Segoe UI', 10),
+                                   style='Main.TLabel')
+            tools_label.pack(pady=(0, 5))
+            
+            desc_label = ttk.Label(main_frame,
+                                  text="AI 기반의 일상 불편함 해결 도구들:",
+                                  font=('Segoe UI', 9),
+                                  style='Secondary.TLabel')
+            desc_label.pack()
+            
+            # kochim.com 버튼
+            website_btn = ttk.Button(main_frame,
+                                   text="🌐 kochim.com 방문하기",
+                                   command=self._open_kochim_website,
+                                   style='Accent.TButton')
+            website_btn.pack(pady=15)
+            
+            # 설명 텍스트
+            desc_text = ("LoveTune (커플 관계 개선), 성격테스트,\n"
+                        "태국어 학습, 이미지 병합 등 다양한\n"
+                        "생활 속 문제 해결 도구들을 제공합니다.")
+            
+            desc_final = ttk.Label(main_frame,
+                                  text=desc_text,
+                                  font=('Segoe UI', 8),
+                                  style='Secondary.TLabel',
+                                  justify='center')
+            desc_final.pack(pady=(0, 15))
+            
+            # 닫기 버튼
+            close_btn = ttk.Button(main_frame,
+                                  text="닫기",
+                                  command=about_window.destroy,
+                                  style='Modern.TButton')
+            close_btn.pack()
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"정보 창을 열 수 없습니다: {e}")
+    
+    def _open_kochim_website(self):
+        """코침 웹사이트 열기"""
+        try:
+            webbrowser.open("https://kochim.com")
+            # 성공 시 간단한 상태 업데이트 (선택적)
+            if hasattr(self, 'status_label'):
+                original_text = self.status_label.cget('text')
+                self.status_label.configure(text="kochim.com이 브라우저에서 열렸습니다")
+                # 3초 후 원래 상태로 복원
+                self.root.after(3000, lambda: self.status_label.configure(text=original_text))
+        except Exception as e:
+            messagebox.showerror("웹사이트 열기 오류", 
+                               f"브라우저에서 kochim.com을 열 수 없습니다.\n\n"
+                               f"다음을 확인해주세요:\n"
+                               f"• 인터넷 연결 상태\n"
+                               f"• 기본 브라우저 설정\n\n"
+                               f"오류 세부사항: {e}")
     
     def _update_status(self):
         """상태바 업데이트"""

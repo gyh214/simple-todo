@@ -4,7 +4,10 @@
       "mcp__sequential-thinking__sequentialthinking_tools",
       "mcp__magicui__getUIComponents",
       "mcp__magicui__getButtons",
-      "Read(C:\\Users\\gyh21\\.claude/**)"
+      "Read(C:\\Users\\gyh21\\.claude/**)",
+      "Bash(dir:*)",
+      "WebFetch(domain:kochim.com)",
+      "Bash(gh:*)"
     ],
     "deny": [],
     "ask": []

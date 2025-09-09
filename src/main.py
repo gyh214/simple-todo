@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Optional, Callable
 import tkinter as tk
 from tkinter import messagebox
+import webbrowser
 
 try:
     import pystray
@@ -208,6 +209,8 @@ class SystemTrayManager:
             menu = pystray.Menu(
                 pystray.MenuItem("TODO Panel 열기", self._on_show_clicked, default=True),
                 pystray.MenuItem("---", None),  # 구분선
+                pystray.MenuItem("더 많은 유용한 도구들", self._on_visit_kochim),
+                pystray.MenuItem("---", None),  # 구분선
                 pystray.MenuItem("종료", self._on_exit_clicked)
             )
             
@@ -230,6 +233,15 @@ class SystemTrayManager:
         self.logger.debug("트레이 메뉴 '열기' 클릭됨")
         if self.on_show:
             self.on_show()
+    
+    def _on_visit_kochim(self, icon, item):
+        """트레이 메뉴 'kochim.com 방문' 클릭"""
+        try:
+            self.logger.info("kochim.com 방문 요청됨")
+            webbrowser.open("https://kochim.com")
+            self.logger.info("kochim.com이 브라우저에서 열림")
+        except Exception as e:
+            self.logger.error(f"웹사이트 열기 실패: {e}", exc_info=True)
     
     def _on_exit_clicked(self, icon, item):
         """트레이 메뉴 '종료' 클릭"""

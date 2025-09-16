@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 from threading import RLock
+from ui.date_utils import DateUtils
 
 
 class TodoManagerError(Exception):
@@ -99,16 +100,20 @@ class TodoManager:
             return 0
         return max(todo['position'] for todo in self._todos) + 1
     
-    def _validate_todo_data(self, text: str) -> None:
+    def _validate_todo_data(self, text: str, due_date: Optional[str] = None) -> None:
         """TODO 데이터 유효성 검증"""
         if not isinstance(text, str):
             raise TodoManagerError("TODO 텍스트는 문자열이어야 합니다.")
-        
+
         if not text.strip():
             raise TodoManagerError("TODO 텍스트는 비어있을 수 없습니다.")
-        
+
         if len(text.strip()) > 500:
             raise TodoManagerError("TODO 텍스트는 500자를 초과할 수 없습니다.")
+
+        # 납기일 유효성 검증
+        if due_date is not None and not DateUtils.validate_date_string(due_date):
+            raise TodoManagerError(f"유효하지 않은 납기일 형식입니다: {due_date}")
     
     def load_data(self) -> None:
         """JSON 파일에서 TODO 데이터를 로드"""
@@ -121,11 +126,9 @@ class TodoManager:
                     # 데이터 구조 검증
                     if isinstance(data, list):
                         self._todos = data
-                        # 기존 데이터에 position 필드가 없는 경우 추가
-                        for i, todo in enumerate(self._todos):
-                            if 'position' not in todo:
-                                todo['position'] = i
-                        
+                        # 기존 데이터 마이그레이션
+                        self._migrate_data()
+
                         self._log(f"{len(self._todos)}개의 TODO 항목을 로드했습니다.")
                     else:
                         self._log("잘못된 데이터 형식. 새로운 데이터로 초기화합니다.")
@@ -158,26 +161,28 @@ class TodoManager:
                 self._log(f"데이터 저장 실패: {e}")
                 raise TodoManagerError(f"데이터 저장 중 오류가 발생했습니다: {e}")
     
-    def create_todo(self, text: str) -> Dict[str, Any]:
+    def create_todo(self, text: str, due_date: Optional[str] = None) -> Dict[str, Any]:
         """
         새로운 TODO 항목을 생성
-        
+
         Args:
             text: TODO 항목의 텍스트
-            
+            due_date: 납기일 (선택사항, ISO 날짜 형식: YYYY-MM-DD)
+
         Returns:
             생성된 TODO 항목 딕셔너리
-            
+
         Raises:
             TodoManagerError: 유효하지 않은 입력이나 저장 실패시
         """
-        self._validate_todo_data(text)
+        self._validate_todo_data(text, due_date)
         
         todo = {
             'id': self._generate_id(),
             'text': text.strip(),
             'completed': False,
             'created_at': datetime.now().isoformat(),
+            'due_date': due_date,
             'position': self._get_next_position()
         }
         
@@ -235,13 +240,19 @@ class TodoManager:
                 if todo['id'] == todo_id:
                     # 허용된 필드만 업데이트
                     if 'text' in kwargs:
-                        self._validate_todo_data(kwargs['text'])
+                        due_date = kwargs.get('due_date', todo.get('due_date'))
+                        self._validate_todo_data(kwargs['text'], due_date)
                         todo['text'] = kwargs['text'].strip()
-                    
+
                     if 'completed' in kwargs:
                         if not isinstance(kwargs['completed'], bool):
                             raise TodoManagerError("completed는 boolean 값이어야 합니다.")
                         todo['completed'] = kwargs['completed']
+
+                    if 'due_date' in kwargs:
+                        if kwargs['due_date'] is not None and not DateUtils.validate_date_string(kwargs['due_date']):
+                            raise TodoManagerError(f"유효하지 않은 납기일 형식입니다: {kwargs['due_date']}")
+                        todo['due_date'] = kwargs['due_date']
                     
                     self.save_data()
                     self._log(f"TODO 항목 업데이트: {todo_id}")
@@ -324,6 +335,31 @@ class TodoManager:
         """모든 TODO 항목의 position을 순서대로 재인덱싱"""
         for i, todo in enumerate(self._todos):
             todo['position'] = i
+
+    def _migrate_data(self) -> None:
+        """기존 데이터를 새로운 스키마로 마이그레이션"""
+        migrated_count = 0
+
+        for i, todo in enumerate(self._todos):
+            # position 필드 추가 (기존 기능)
+            if 'position' not in todo:
+                todo['position'] = i
+                migrated_count += 1
+
+            # created_at 필드 추가 (기본값: 2025-09-01)
+            if 'created_at' not in todo:
+                todo['created_at'] = DateUtils.DEFAULT_CREATED_DATE + "T00:00:00"
+                migrated_count += 1
+
+            # due_date 필드 추가 (기본값: None)
+            if 'due_date' not in todo:
+                todo['due_date'] = None
+                migrated_count += 1
+
+        if migrated_count > 0:
+            self._log(f"데이터 마이그레이션 완료: {migrated_count}개 필드 추가")
+            # 마이그레이션 후 저장
+            self.save_data()
     
     def get_completed_todos(self) -> List[Dict[str, Any]]:
         """완료된 TODO 항목들만 조회"""

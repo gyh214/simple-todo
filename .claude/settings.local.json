@@ -7,7 +7,9 @@
       "Read(C:\\Users\\gyh21\\.claude/**)",
       "Bash(dir:*)",
       "WebFetch(domain:kochim.com)",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Read(//c/Users/gyh21/OneDrive/바탕 화면/**)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

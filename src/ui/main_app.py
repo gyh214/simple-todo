@@ -95,14 +95,16 @@ class DatePickerDialog:
     - 파일 첨부
     """
 
-    def __init__(self, parent, todo_text="", initial_date=None):
+    def __init__(self, parent, todo_text="", initial_date=None, edit_mode=False):
         self.parent = parent
         self.todo_text = todo_text
-        self.selected_date = None
+        self.selected_date = initial_date  # 편집 모드에서 초기 날짜 설정
         self.result = None  # 'with_date', 'without_date', 'cancelled'
+        self.edit_mode = edit_mode
+        self.updated_text = todo_text  # 편집된 텍스트 저장
 
         self.dialog = tk.Toplevel(parent)
-        self.dialog.title("할일 추가")
+        self.dialog.title("할일 수정" if edit_mode else "할일 추가")
         self.dialog.transient(parent)
         self.dialog.grab_set()
 
@@ -219,7 +221,13 @@ class DatePickerDialog:
         """
         self._setup_main_frame()
         self._setup_header()
-        self._setup_todo_display()
+
+        # 편집 모드일 때 텍스트 입력 필드 추가
+        if self.edit_mode:
+            self._setup_text_input()
+        else:
+            self._setup_todo_display()
+
         self._setup_calendar_section()
 
         # 🔧 새 기능들을 여기에 추가하세요:
@@ -294,6 +302,45 @@ class DatePickerDialog:
                 )
                 preview_label.pack(fill=tk.X, pady=(0, 15))
 
+    def _setup_text_input(self):
+        """편집 모드에서 할일 텍스트 입력 섹션 구성"""
+        colors = DARK_COLORS
+
+        # 할일 텍스트 입력 섹션 라벨
+        text_label = tk.Label(self.main_frame,
+                             text="📝 할일 내용",
+                             font=('Segoe UI', 12, 'bold'),
+                             bg=colors['bg'],
+                             fg=colors['text'])
+        text_label.pack(pady=(0, 10))
+
+        # 텍스트 입력 필드
+        self.text_entry = tk.Entry(self.main_frame,
+                                  font=('Segoe UI', 10),
+                                  bg=colors['entry_bg'],
+                                  fg=colors['text'],
+                                  borderwidth=1,
+                                  relief='solid',
+                                  insertbackground=colors['text'])
+        self.text_entry.pack(fill=tk.X, pady=(0, 15), padx=10)
+
+        # 기존 텍스트 설정
+        if self.todo_text:
+            self.text_entry.insert(0, self.todo_text)
+            self.text_entry.selection_range(0, tk.END)
+
+        # 포커스 설정
+        self.text_entry.focus()
+
+        # 이벤트 바인딩
+        self.text_entry.bind('<Return>', self._on_text_change)
+        self.text_entry.bind('<KeyRelease>', self._on_text_change)
+
+    def _on_text_change(self, event=None):
+        """텍스트 변경 시 updated_text 업데이트"""
+        if hasattr(self, 'text_entry'):
+            self.updated_text = self.text_entry.get().strip()
+
     def _setup_calendar_section(self):
         """캘린더 섹션 구성"""
         colors = DARK_COLORS
@@ -333,31 +380,55 @@ class DatePickerDialog:
         button_frame = tk.Frame(self.main_frame, bg=colors['bg'])
         button_frame.pack(fill=tk.X, pady=(10, 0))
 
-        # 버튼들
+        # 버튼들 (편집 모드에 따라 텍스트 변경)
         no_date_style = get_button_style('secondary')
+        no_date_text = "납기일 없이 수정" if self.edit_mode else "납기일 없이 추가"
         self.no_date_btn = tk.Button(button_frame,
-                                    text="납기일 없이 추가",
+                                    text=no_date_text,
                                     command=self._add_without_date,
                                     **no_date_style)
         self.no_date_btn.pack(side=tk.LEFT, padx=(0, 10))
 
-        # 납기일과 함께 추가 버튼 (Primary 스타일)
+        # 납기일과 함께 추가/수정 버튼 (Primary 스타일)
         with_date_style = get_button_style('primary')
+        with_date_text = "납기일과 함께 수정" if self.edit_mode else "납기일과 함께 추가"
         self.with_date_btn = tk.Button(button_frame,
-                                      text="납기일과 함께 추가",
+                                      text=with_date_text,
                                       command=self._add_with_date,
                                       state='disabled',
                                       **with_date_style)
         self.with_date_btn.pack(side=tk.RIGHT)
 
+        # 편집 모드에서 납기일 제거 버튼 추가
+        if self.edit_mode:
+            remove_date_style = get_button_style('danger')
+            self.remove_date_btn = tk.Button(button_frame,
+                                           text="납기일 제거",
+                                           command=self._remove_date,
+                                           **remove_date_style)
+            self.remove_date_btn.pack(side=tk.RIGHT, padx=(10, 0))
+
     def _setup_calendar(self):
         """간단한 캘린더 UI 구성"""
         colors = DARK_COLORS
 
-        # 현재 날짜
-        today = datetime.now()
-        self.current_month = today.month
-        self.current_year = today.year
+        # 현재 날짜 또는 초기 날짜 설정
+        if self.selected_date:
+            # 초기 날짜가 있으면 해당 년월로 설정
+            try:
+                initial_date = datetime.fromisoformat(self.selected_date)
+                self.current_month = initial_date.month
+                self.current_year = initial_date.year
+            except:
+                # 날짜 파싱 실패시 현재 날짜 사용
+                today = datetime.now()
+                self.current_month = today.month
+                self.current_year = today.year
+        else:
+            # 초기 날짜가 없으면 현재 날짜 사용
+            today = datetime.now()
+            self.current_month = today.month
+            self.current_year = today.year
 
         # 월/년 선택 프레임
         month_year_frame = tk.Frame(self.calendar_frame, bg=colors['bg'])
@@ -440,21 +511,37 @@ class DatePickerDialog:
         # 오늘 날짜
         today = datetime.now().date()
 
+        # 기존 선택된 날짜 파싱 (편집 모드용)
+        selected_day = None
+        if self.selected_date:
+            try:
+                selected_parsed = datetime.fromisoformat(self.selected_date).date()
+                if (selected_parsed.year == self.current_year and
+                    selected_parsed.month == self.current_month):
+                    selected_day = selected_parsed.day
+            except:
+                pass
+
         row = 1
         col = first_weekday
 
         for day in range(1, last_day.day + 1):
             current_date = datetime(self.current_year, self.current_month, day).date()
 
-            # 과거 날짜는 비활성화
+            # 과거 날짜도 선택 가능하되 시각적으로 구분
             is_past = current_date < today
             is_today = current_date == today
+            is_selected = (day == selected_day)  # 기존 선택된 날짜
 
             # 버튼 색상 설정
             if is_past:
                 bg_color = colors['bg_secondary']
                 fg_color = colors['text_secondary']
-                state = 'disabled'
+                state = 'normal'  # 과거 날짜도 활성화
+            elif is_selected:  # 기존 선택된 날짜
+                bg_color = colors['accent']
+                fg_color = 'white'
+                state = 'normal'
             elif is_today:
                 bg_color = colors['warning']
                 fg_color = colors['bg']
@@ -471,9 +558,9 @@ class DatePickerDialog:
                                state=state,
                                command=lambda d=day: self._select_date(d))
 
-            if not is_past:
-                date_btn.bind('<Enter>', lambda e, btn=date_btn: btn.configure(bg=colors['bg_hover']))
-                date_btn.bind('<Leave>', lambda e, btn=date_btn, orig_bg=bg_color: btn.configure(bg=orig_bg))
+            # 모든 날짜에 호버 효과 적용
+            date_btn.bind('<Enter>', lambda e, btn=date_btn: btn.configure(bg=colors['bg_hover']))
+            date_btn.bind('<Leave>', lambda e, btn=date_btn, orig_bg=bg_color: btn.configure(bg=orig_bg))
 
             date_btn.grid(row=row, column=col, padx=1, pady=1)
 
@@ -482,11 +569,25 @@ class DatePickerDialog:
                 col = 0
                 row += 1
 
+        # 편집 모드에서 기존 날짜가 선택되어 있으면 버튼 활성화
+        if self.edit_mode and selected_day:
+            self.with_date_btn.configure(state='normal')
+            # Primary 스타일로 활성화
+            primary_style = get_button_style('primary')
+            for key, value in primary_style.items():
+                if key != 'state':
+                    self.with_date_btn.configure({key: value})
+
+            # 선택된 날짜 표시 업데이트
+            selected_text = f"선택: {self.current_year}년 {self.current_month}월 {selected_day}일"
+            action_text = "납기일과 함께 수정" if self.edit_mode else "납기일과 함께 추가"
+            self.with_date_btn.configure(text=f"{action_text}\n({selected_text})")
+
     def _select_date(self, day):
         """날짜 선택"""
         self.selected_date = f"{self.current_year:04d}-{self.current_month:02d}-{day:02d}"
 
-        # "납기일과 함께 추가" 버튼 활성화 및 스타일 업데이트
+        # "납기일과 함께 추가/수정" 버튼 활성화 및 스타일 업데이트
         self.with_date_btn.configure(state='normal')
         # Primary 스타일로 활성화
         primary_style = get_button_style('primary')
@@ -496,19 +597,52 @@ class DatePickerDialog:
 
         # 선택된 날짜 표시 업데이트
         selected_text = f"선택: {self.current_year}년 {self.current_month}월 {day}일"
-        self.with_date_btn.configure(text=f"납기일과 함께 추가\n({selected_text})")
+        action_text = "납기일과 함께 수정" if self.edit_mode else "납기일과 함께 추가"
+        self.with_date_btn.configure(text=f"{action_text}\n({selected_text})")
 
     def _add_without_date(self):
-        """납기일 없이 추가"""
+        """납기일 없이 추가/수정"""
+        # 편집 모드에서 텍스트 검증
+        if self.edit_mode and hasattr(self, 'text_entry'):
+            text = self.text_entry.get().strip()
+            if not text:
+                import tkinter.messagebox as messagebox
+                messagebox.showerror("입력 오류", "할일 내용을 입력해주세요.")
+                return
+            self.updated_text = text
+
         self.result = 'without_date'
         self.selected_date = None
         self.dialog.destroy()
 
     def _add_with_date(self):
-        """납기일과 함께 추가"""
+        """납기일과 함께 추가/수정"""
+        # 편집 모드에서 텍스트 검증
+        if self.edit_mode and hasattr(self, 'text_entry'):
+            text = self.text_entry.get().strip()
+            if not text:
+                import tkinter.messagebox as messagebox
+                messagebox.showerror("입력 오류", "할일 내용을 입력해주세요.")
+                return
+            self.updated_text = text
+
         if self.selected_date:
             self.result = 'with_date'
             self.dialog.destroy()
+
+    def _remove_date(self):
+        """납기일 제거 (편집 모드에서만 사용)"""
+        if self.edit_mode and hasattr(self, 'text_entry'):
+            text = self.text_entry.get().strip()
+            if not text:
+                import tkinter.messagebox as messagebox
+                messagebox.showerror("입력 오류", "할일 내용을 입력해주세요.")
+                return
+            self.updated_text = text
+
+        self.result = 'without_date'
+        self.selected_date = None
+        self.dialog.destroy()
 
     def _cancel(self):
         """취소"""
@@ -519,7 +653,10 @@ class DatePickerDialog:
     def show(self):
         """다이얼로그 표시 및 결과 반환"""
         self.dialog.wait_window()
-        return self.result, self.selected_date
+        if self.edit_mode:
+            return self.result, self.selected_date, self.updated_text
+        else:
+            return self.result, self.selected_date
 
 
 class CollapsibleSection:
@@ -813,7 +950,7 @@ class TodoPanelApp:
 
         # PanedWindow에 프레임들 추가
         self.sections_paned_window.add(pending_frame, minsize=100, sticky="nsew")
-        self.sections_paned_window.add(completed_frame, minsize=80, sticky="nsew")
+        self.sections_paned_window.add(completed_frame, minsize=40, sticky="nsew")
 
         # 기본 분할 비율 설정 (진행중 70%, 완료 30%)
         self.root.after(100, self._set_initial_pane_ratio)
@@ -1551,12 +1688,12 @@ class TodoPanelApp:
             config_file = Path(os.path.expanduser("~")) / "AppData" / "Local" / "TodoPanel" / "ui_settings.json"
 
             if not config_file.exists():
-                return 0.7  # 기본값
+                return 0.8  # 기본값
 
             with open(config_file, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
 
-            ratio = settings.get('paned_window_ratio', 0.7)
+            ratio = settings.get('paned_window_ratio', 0.8)
 
             # 유효한 범위인지 검증 (0.1 ~ 0.9)
             ratio = max(0.1, min(0.9, ratio))
@@ -1569,7 +1706,7 @@ class TodoPanelApp:
         except Exception as e:
             if hasattr(self, '_debug') and self._debug:
                 print(f"[DEBUG] 분할 비율 로드 실패, 기본값 사용: {e}")
-            return 0.7  # 기본값
+            return 0.8  # 기본값
 
     def _update_status(self):
         """상태바 업데이트"""

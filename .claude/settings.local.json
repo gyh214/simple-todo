@@ -15,7 +15,9 @@
       "Bash(python:*)",
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
-      "mcp__magicui__getComponents"
+      "mcp__magicui__getComponents",
+      "mcp__magicui__getTextAnimations",
+      "Read(//c/Users/gyh21/AppData/Local/TodoPanel/**)"
     ],
     "deny": [],
     "ask": []

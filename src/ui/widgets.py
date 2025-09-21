@@ -485,8 +485,7 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         self.on_reorder = on_reorder
         self._debug = debug
 
-        self.is_editing = False
-        self.edit_entry = None
+        # 편집 관련 상태 제거 (DatePickerDialog로 통합)
 
         self._setup_widget()
         self._setup_events()
@@ -543,21 +542,7 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         self.delete_btn.pack(side=tk.RIGHT, padx=(2, 4), pady=3)
         ToolTip(self.delete_btn, "삭제")
 
-        # 편집 버튼
-        self.edit_btn = tk.Button(self,
-                                 text='✎',
-                                 font=('Segoe UI', 9),
-                                 bg=colors['accent'],
-                                 fg='white',
-                                 border=0,
-                                 width=2,
-                                 height=1,
-                                 command=self._start_edit,
-                                 cursor='hand2',
-                                 relief='flat',
-                                 activebackground=colors.get('accent_hover', colors['accent']))
-        self.edit_btn.pack(side=tk.RIGHT, padx=(2, 0), pady=3)
-        ToolTip(self.edit_btn, "편집 (더블클릭도 가능)")
+        # 편집 버튼 제거 (더블클릭으로 DatePickerDialog 사용)
 
         # 중앙: 텍스트와 납기일 표시 영역
         text_frame = tk.Frame(self, bg=colors['bg_secondary'])
@@ -654,8 +639,8 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
 
     def _setup_events(self):
         """이벤트 설정"""
-        # 더블클릭으로 편집 모드 (ClickableTextWidget의 text_widget에 바인딩)
-        self.text_widget.text_widget.bind('<Double-Button-1>', lambda e: self._start_edit())
+        # 더블클릭으로 편집 다이얼로그 열기
+        self.text_widget.text_widget.bind('<Double-Button-1>', lambda e: self._edit_todo_dialog())
 
         # 호버 효과
         widgets = [self, self.text_widget, self.checkbox]
@@ -688,7 +673,6 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
             self.drag_handle,              # 드래그 핸들
             self.checkbox,                 # 체크박스
             self.delete_btn,               # 삭제 버튼
-            self.edit_btn,                 # 편집 버튼
             self.text_widget,              # ClickableTextWidget 프레임
             self.text_widget.text_widget,  # 실제 Text 위젯
         ]
@@ -776,112 +760,60 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         # URL 스타일도 다시 적용
         self.text_widget._setup_clickable_text()
 
-    def _start_edit(self):
-        """편집 모드 시작"""
-        if self.is_editing:
-            return
+    def _edit_todo_dialog(self, event=None):
+        """할일 더블클릭시 편집 다이얼로그 표시"""
+        try:
+            # DatePickerDialog import
+            from .main_app import DatePickerDialog
 
-        self.is_editing = True
-        colors = DARK_COLORS
+            current_text = self.todo_data['text']
+            current_date = self.todo_data.get('due_date')
 
-        # 기존 텍스트 위젯 숨기기
-        self.text_widget.pack_forget()
+            # DatePickerDialog 편집 모드로 호출
+            dialog = DatePickerDialog(
+                self.winfo_toplevel(),
+                current_text,
+                current_date,
+                edit_mode=True
+            )
+            result, selected_date, updated_text = dialog.show()
 
-        # 편집용 Entry 생성
-        self.edit_entry = tk.Entry(self.text_widget.master,
-                                  font=('Segoe UI', 9),
-                                  bg=colors['entry_bg'],
-                                  fg=colors['text'],
-                                  borderwidth=1,
-                                  relief='solid')
-        self.edit_entry.pack(side=tk.TOP, fill=tk.X, expand=True)
+            if result != 'cancelled':
+                # 할일 업데이트 (텍스트 + 납기일)
+                update_kwargs = {}
 
-        # 기존 텍스트 설정 및 선택
-        self.edit_entry.insert(0, self.todo_data['text'])
-        self.edit_entry.selection_range(0, tk.END)
-        self.edit_entry.focus()
+                # 텍스트 변경 시
+                if updated_text and updated_text != current_text:
+                    update_kwargs['text'] = updated_text
 
-        # 이벤트 바인딩
-        self.edit_entry.bind('<Return>', self._confirm_edit)
-        self.edit_entry.bind('<Escape>', self._cancel_edit)
-        self.edit_entry.bind('<FocusOut>', self._confirm_edit)
+                # 납기일 설정
+                if result == 'with_date':
+                    update_kwargs['due_date'] = selected_date
+                elif result == 'without_date':
+                    update_kwargs['due_date'] = None
 
-    def _get_preserved_update_kwargs(self, **new_fields):
-        """
-        ⚠️ DEPRECATED: 중복 로직 제거됨
+                # 업데이트 수행
+                if update_kwargs:
+                    self.on_update(self.todo_data['id'], **update_kwargs)
 
-        이 메서드는 DRY 원칙을 위반하는 중복 로직이었습니다.
-        TodoManager._prepare_update_data 메서드로 통합되었습니다.
+                    if self._debug:
+                        print(f"[DEBUG] 할일 편집 완료: {update_kwargs}")
 
-        🔄 새로운 패턴:
-        -----------
-        기존: UI 레이어에서 직접 메타데이터 보존 (중복)
-        신규: TodoManager가 중앙집중식으로 처리 (단일 책임)
-
-        Args:
-            **new_fields: 새로 변경할 필드들
-
-        Returns:
-            dict: 데이터 매니저에게 위임할 kwargs (변경 없이 그대로 반환)
-        """
-        # 데이터 보존 로직은 TodoManager로 완전 이관
-        # UI 레이어는 더 이상 데이터 처리 서비스를 제공하지 않음
-        if self._debug:
-            try:
-                print(f"[DEBUG] 중앙집중식 데이터 보존으로 전환: {list(new_fields.keys())} 필드를 TodoManager로 전달")
-            except UnicodeEncodeError:
-                print(f"[DEBUG] Delegating to centralized data preservation for {len(new_fields)} fields")
-
-        # TodoManager._prepare_update_data가 전체 보존 로직을 처리
-        return dict(new_fields)
-
-    def _confirm_edit(self, event=None):
-        """편집 확인 - 완전한 데이터 컨텍스트 보존"""
-        if not self.is_editing or not self.edit_entry:
-            return
-
-        new_text = self.edit_entry.get().strip()
-
-        if new_text and new_text != self.todo_data['text']:
-            # 로컬 데이터 업데이트
-            self.todo_data['text'] = new_text
-
-            # 텍스트 위젯 내용 업데이트 (URL 감지 포함)
-            self.text_widget.update_text(new_text)
-
-            # 납기일 표시 순서 재정렬 (UI 일관성 보장)
-            self._update_due_date_display()
-
-            # 🔒 완전한 데이터 컨텍스트 보존으로 업데이트
-            # 기존 due_date 및 모든 메타데이터를 보존하며 텍스트만 변경
-            update_kwargs = self._get_preserved_update_kwargs(text=new_text)
-            self.on_update(self.todo_data['id'], **update_kwargs)
-
+        except Exception as e:
+            import tkinter.messagebox as messagebox
+            messagebox.showerror("편집 오류", f"할일 편집 중 오류가 발생했습니다: {e}")
             if self._debug:
-                try:
-                    print(f"[DEBUG] 편집 완료: '{new_text}' (메타데이터 보존됨)")
-                except UnicodeEncodeError:
-                    print(f"[DEBUG] Edit completed with preserved metadata")
+                print(f"[DEBUG] 편집 오류: {e}")
+                import traceback
+                traceback.print_exc()
 
-        self._end_edit()
+    # _get_preserved_update_kwargs 메서드 제거 (더 이상 필요 없음)
 
-    def _cancel_edit(self, event=None):
-        """편집 취소"""
-        self._end_edit()
+    # _confirm_edit 메서드 제거 (DatePickerDialog로 대체)
 
-    def _end_edit(self):
-        """편집 모드 종료"""
-        if not self.is_editing:
-            return
+    # _cancel_edit 메서드 제거 (DatePickerDialog로 대체)
 
-        self.is_editing = False
-
-        # Entry 제거하고 텍스트 위젯 복원
-        if self.edit_entry:
-            self.edit_entry.destroy()
-            self.edit_entry = None
-
-        self.text_widget.pack(side=tk.TOP, fill=tk.X, expand=True)
+    # _end_edit 메서드 제거 (DatePickerDialog로 대체)
 
     def _delete_todo(self):
         """TODO 항목 삭제"""

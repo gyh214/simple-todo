@@ -20,16 +20,10 @@ from ui.main_app import (
 from ui.sort_manager import SortManager
 from ui.date_utils import DateUtils
 
-# 하위 호환성을 위한 ThemeManager 클래스 (기존 API 유지)
-class ThemeManager:
-    """하위 호환성을 위한 더미 ThemeManager 클래스"""
-
-    def __init__(self, root):
-        self.root = root
-
-    def get_colors(self):
-        """다크 테마 색상 반환"""
-        return DARK_COLORS
+# 하위 호환성을 위한 단순한 유틸리티 함수들
+def get_colors():
+    """다크 테마 색상 반환 (하위 호환성)"""
+    return DARK_COLORS
 
 # 메인 함수는 새로운 모듈의 것을 사용
 def main():
@@ -43,7 +37,7 @@ def main():
 
 # 기존 코드와의 호환성을 위한 __all__ 선언
 __all__ = [
-    'ThemeManager',
+    'get_colors',
     'DragDropMixin',
     'ClickableTextWidget',
     'TodoItemWidget',

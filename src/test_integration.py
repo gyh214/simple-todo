@@ -139,7 +139,7 @@ def test_imports():
     print("OK 새로운 모듈들 import")
 
     # 하위 호환성 import
-    from ui_components import ThemeManager, TodoPanelApp as LegacyTodoPanelApp
+    from ui_components import get_colors, TodoPanelApp as LegacyTodoPanelApp
     assert TodoPanelApp == LegacyTodoPanelApp
     print("OK 하위 호환성 import")
 

@@ -7,17 +7,52 @@ from tkinter import ttk, messagebox
 import webbrowser
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
-from .widgets import DARK_COLORS, TodoItemWidget
-from .sort_manager import SortManager
-from .date_utils import DateUtils
-from tooltip import ToolTip
-
-# 기본 TodoManager 또는 AsyncTodoManager 사용
+# 안전한 import 처리
 try:
-    from async_todo_manager import AsyncTodoManager as TodoManager, AsyncTodoManagerError as TodoManagerError
+    from .widgets import DARK_COLORS, TodoItemWidget, StandardTodoDisplay, get_button_style
+except ImportError as e:
+    print(f"Warning: Failed to import from widgets module: {e}")
+    # 기본 fallback 정의
+    DARK_COLORS = {
+        'bg': '#1e1e1e', 'bg_secondary': '#2d2d30', 'bg_hover': '#3e3e42',
+        'text': '#ffffff', 'text_secondary': '#cccccc', 'border': '#3e3e42',
+        'accent': '#007acc', 'warning': '#ff9800', 'danger': '#f44336'
+    }
+    TodoItemWidget = None
+    StandardTodoDisplay = None
+
+    def get_button_style(button_type='primary'):
+        return {
+            'font': ('Segoe UI', 9), 'border': 0, 'relief': 'flat',
+            'bg': DARK_COLORS['accent'] if button_type == 'primary' else DARK_COLORS['button_bg'],
+            'fg': 'white' if button_type == 'primary' else DARK_COLORS['text']
+        }
+
+try:
+    from .sort_manager import SortManager
 except ImportError:
-    # AsyncTodoManager가 없으면 기본 TodoManager 사용
-    from todo_manager import TodoManager, TodoManagerError
+    SortManager = None
+
+try:
+    from .date_utils import DateUtils
+except ImportError:
+    DateUtils = None
+
+try:
+    from tooltip import ToolTip
+except ImportError:
+    # ToolTip fallback
+    class ToolTip:
+        def __init__(self, widget, text):
+            pass
+
+# CLEAN 아키텍처 인터페이스 (Domain Layer)
+try:
+    from interfaces import ITodoService, INotificationService
+except ImportError:
+    # 인터페이스가 없는 경우 대체 구현
+    ITodoService = None
+    INotificationService = None
 
 
 class DatePickerDialog:
@@ -71,7 +106,7 @@ class DatePickerDialog:
         self.dialog.transient(parent)
         self.dialog.grab_set()
 
-        # 색상 테마
+        # 다크 테마 색상 적용
         colors = DARK_COLORS
         self.dialog.configure(bg=colors['bg'])
 
@@ -218,26 +253,46 @@ class DatePickerDialog:
         title_label.pack(pady=(0, 10))
 
     def _setup_todo_display(self):
-        """TODO 텍스트 표시 섹션 구성"""
+        """TODO 텍스트 표시 섹션 구성 - StandardTodoDisplay 사용"""
         if self.todo_text:
-            colors = DARK_COLORS
-            text_frame = tk.Frame(self.main_frame, bg=colors['bg_secondary'],
-                                 relief='solid', borderwidth=1)
-            text_frame.pack(fill=tk.X, pady=(0, 15))
+            # StandardTodoDisplay가 사용 가능한지 확인
+            if StandardTodoDisplay is not None:
+                # StandardTodoDisplay로 일관된 TODO 렌더링
+                # 임시 TODO 데이터 생성 (표시용)
+                temp_todo = {
+                    'id': 'preview',
+                    'text': self.todo_text,
+                    'completed': False,
+                    'created_at': datetime.now().isoformat(),
+                    'due_date': None  # 아직 설정되지 않음
+                }
 
-            # 현재 다이얼로그 크기에 따른 동적 wraplength 계산
-            dialog_width = int(self.dialog.winfo_reqwidth() or 350)
-            wrap_length = max(250, dialog_width - 80)  # 여백 고려
+                # StandardTodoDisplay 컴포넌트 사용
+                display_frame = StandardTodoDisplay(
+                    self.main_frame,
+                    todo_data=temp_todo,
+                    read_only=True  # 읽기전용 모드
+                )
+                display_frame.pack(fill=tk.X, pady=(0, 15))
 
-            text_label = tk.Label(text_frame,
-                                 text=f'"{self.todo_text}"',
-                                 font=('Segoe UI', 10),
-                                 bg=colors['bg_secondary'],
-                                 fg=colors['text'],
-                                 wraplength=wrap_length,
-                                 justify='center',
-                                 padx=10, pady=8)
-            text_label.pack()
+                # 미리보기 표시를 위한 스타일 적용
+                display_frame.configure(relief='solid', borderwidth=1)
+            else:
+                # StandardTodoDisplay가 없는 경우 기본 라벨로 대체
+                preview_label = tk.Label(
+                    self.main_frame,
+                    text=f"📝 {self.todo_text}",
+                    font=('Segoe UI', 10),
+                    bg=DARK_COLORS['bg_secondary'],
+                    fg=DARK_COLORS['text'],
+                    anchor='w',
+                    justify='left',
+                    relief='solid',
+                    borderwidth=1,
+                    padx=8,
+                    pady=6
+                )
+                preview_label.pack(fill=tk.X, pady=(0, 15))
 
     def _setup_calendar_section(self):
         """캘린더 섹션 구성"""
@@ -278,25 +333,21 @@ class DatePickerDialog:
         button_frame = tk.Frame(self.main_frame, bg=colors['bg'])
         button_frame.pack(fill=tk.X, pady=(10, 0))
 
-        # 납기일 없이 추가 버튼
+        # 버튼들
+        no_date_style = get_button_style('secondary')
         self.no_date_btn = tk.Button(button_frame,
                                     text="납기일 없이 추가",
-                                    font=('Segoe UI', 10),
-                                    bg=colors['button_bg'],
-                                    fg=colors['text'],
                                     command=self._add_without_date,
-                                    padx=20, pady=8)
+                                    **no_date_style)
         self.no_date_btn.pack(side=tk.LEFT, padx=(0, 10))
 
-        # 납기일과 함께 추가 버튼
+        # 납기일과 함께 추가 버튼 (Primary 스타일)
+        with_date_style = get_button_style('primary')
         self.with_date_btn = tk.Button(button_frame,
                                       text="납기일과 함께 추가",
-                                      font=('Segoe UI', 10, 'bold'),
-                                      bg=colors['accent'],
-                                      fg='white',
                                       command=self._add_with_date,
                                       state='disabled',
-                                      padx=20, pady=8)
+                                      **with_date_style)
         self.with_date_btn.pack(side=tk.RIGHT)
 
     def _setup_calendar(self):
@@ -435,8 +486,13 @@ class DatePickerDialog:
         """날짜 선택"""
         self.selected_date = f"{self.current_year:04d}-{self.current_month:02d}-{day:02d}"
 
-        # "납기일과 함께 추가" 버튼 활성화
+        # "납기일과 함께 추가" 버튼 활성화 및 스타일 업데이트
         self.with_date_btn.configure(state='normal')
+        # Primary 스타일로 활성화
+        primary_style = get_button_style('primary')
+        for key, value in primary_style.items():
+            if key != 'state':  # state는 별도 관리
+                self.with_date_btn.configure({key: value})
 
         # 선택된 날짜 표시 업데이트
         selected_text = f"선택: {self.current_year}년 {self.current_month}월 {day}일"
@@ -543,15 +599,31 @@ class CollapsibleSection:
 class TodoPanelApp:
     """메인 TODO 패널 애플리케이션 (섹션 분할 및 새로운 기능 포함)"""
 
-    def __init__(self):
-        self.root = tk.Tk()
+    def __init__(self, root=None, todo_service=None, notification_service=None):
+        # CLEAN 아키텍처 지원: 인터페이스 또는 기본 구현 사용
+        if root is None:
+            self.root = tk.Tk()
+        else:
+            self.root = root
 
-        # TodoManager 초기화
-        try:
-            self.todo_manager = TodoManager(debug=True, batch_save=True)
-        except TypeError:
-            # batch_save 파라미터가 없는 기본 TodoManager의 경우
-            self.todo_manager = TodoManager(debug=True)
+        # 다크 테마 색상 사용
+
+        # CLEAN 아키텍처 서비스 또는 기본 구현 사용
+        if todo_service is not None:
+            # CLEAN 아키텍처 서비스 사용
+            self.todo_service = todo_service
+            self.notification_service = notification_service
+            self.todo_manager = None  # 서비스 패턴 사용시 직접 manager 사용 안함
+        else:
+            # 기존 TodoManager 초기화 (하위 호환성)
+            try:
+                from todo_manager import UnifiedTodoManager as TodoManager
+                self.todo_manager = TodoManager(debug=True, batch_save=True)
+            except (ImportError, TypeError):
+                # batch_save 파라미터가 없는 기본 TodoManager의 경우
+                self.todo_manager = TodoManager(debug=True)
+            self.todo_service = None
+            self.notification_service = None
 
         # 정렬 관리자
         self.sort_manager = SortManager()
@@ -722,22 +794,34 @@ class TodoPanelApp:
         )
 
     def _setup_scrollable_area(self, parent, section_type):
-        """스크롤 가능한 영역 설정"""
+        """스크롤 가능한 영역 설정 (멀티 플랫폼 마우스 휠 지원)"""
+        import sys
         colors = DARK_COLORS
 
         # 스크롤 컨테이너
         scroll_container = tk.Frame(parent, bg=colors['bg'])
         scroll_container.pack(fill=tk.BOTH, expand=True)
 
-        # 캔버스와 스크롤바
+        # 캔버스와 스크롤바 (동적 크기 조정)
+        # 최소 높이와 최대 높이 설정
+        min_height = 100
+        max_height = 400 if section_type == 'pending' else 300
+        default_height = 200 if section_type == 'pending' else 150
+
         canvas = tk.Canvas(scroll_container,
                           highlightthickness=0,
                           bg=colors['bg'],
-                          height=200 if section_type == 'pending' else 150)
+                          height=default_height,
+                          takefocus=True)  # ✅ 포커스 설정 추가
         scrollbar = tk.Scrollbar(scroll_container,
                                 orient=tk.VERTICAL,
                                 command=canvas.yview,
-                                bg=colors['bg_secondary'])
+                                bg=colors['bg_secondary'],
+                                troughcolor=colors['bg'],
+                                activebackground=colors['accent'],
+                                highlightthickness=0,
+                                borderwidth=1,
+                                elementborderwidth=1)
 
         canvas.configure(yscrollcommand=scrollbar.set)
 
@@ -753,17 +837,165 @@ class TodoPanelApp:
 
         # 이벤트 바인딩
         def configure_scroll_region(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            # 레이아웃 계산 완료 후 스크롤 영역 업데이트
+            canvas.after_idle(lambda: _update_scroll_region(canvas))
+
+        def _update_scroll_region(canvas_widget):
+            """스크롤 영역을 안전하게 업데이트"""
+            try:
+                # 업데이트 전 잠시 대기 (레이아웃 완료 확보)
+                canvas_widget.update_idletasks()
+
+                # bbox("all")이 None을 반환할 수 있으므로 안전하게 처리
+                bbox = canvas_widget.bbox("all")
+                if bbox:
+                    # ✅ 스크롤 영역 정확한 설정
+                    canvas_widget.configure(scrollregion=bbox)
+                    # 스크롤바 가시성 업데이트
+                    _update_scrollbar_visibility(canvas_widget, scrollbar)
+                else:
+                    # 내용이 없으면 스크롤 영역 초기화
+                    canvas_widget.configure(scrollregion=(0, 0, 0, 0))
+                    scrollbar.pack_forget()  # 스크롤바 숨김
+            except Exception as e:
+                # 예외 발생 시 로그 출력 (디버깅용)
+                if hasattr(self, '_debug') and self._debug:
+                    print(f"[DEBUG] 스크롤 영역 업데이트 실패: {e}")
+
+        def _update_scrollbar_visibility(canvas_widget, scrollbar_widget):
+            """스크롤바 가시성을 동적으로 조정"""
+            try:
+                # 캔버스 크기와 내용 크기 비교
+                canvas_height = canvas_widget.winfo_height()
+                scroll_region = canvas_widget.cget('scrollregion')
+
+                if scroll_region:
+                    # scrollregion은 "x1 y1 x2 y2" 형식의 문자열
+                    coords = scroll_region.split()
+                    if len(coords) >= 4:
+                        content_height = int(float(coords[3])) - int(float(coords[1]))
+
+                        # 내용이 캔버스보다 클 때만 스크롤바 표시
+                        if content_height > canvas_height:
+                            scrollbar_widget.pack(side=tk.RIGHT, fill=tk.Y)
+                        else:
+                            scrollbar_widget.pack_forget()
+            except Exception as e:
+                # 에러 발생 시 기본적으로 스크롤바 표시
+                scrollbar_widget.pack(side=tk.RIGHT, fill=tk.Y)
 
         def configure_canvas_width(event):
             canvas.itemconfig(canvas_window, width=event.width)
 
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        def adjust_canvas_height():
+            """내용에 따라 Canvas 높이를 동적으로 조정"""
+            try:
+                # 스크롤 가능한 프레임의 실제 높이 계산
+                scrollable_frame.update_idletasks()
+                content_height = scrollable_frame.winfo_reqheight()
 
+                # 최소/최대 높이 제한 적용
+                new_height = max(min_height, min(content_height + 20, max_height))
+
+                # 현재 높이와 다르면 업데이트
+                current_height = canvas.winfo_reqheight()
+                if abs(new_height - current_height) > 5:  # 5px 이상 차이날 때만 업데이트
+                    canvas.configure(height=new_height)
+
+                    # Canvas 크기 변경 후 스크롤 영역도 업데이트
+                    canvas.after_idle(lambda: _update_scroll_region(canvas))
+
+            except Exception as e:
+                if hasattr(self, '_debug') and self._debug:
+                    print(f"[DEBUG] Canvas 높이 조정 실패: {e}")
+
+        def on_content_change():
+            """내용 변경 시 Canvas 높이 조정"""
+            canvas.after_idle(adjust_canvas_height)
+
+        # ✅ 공통 마우스 휠 핸들러 (Canvas 참조를 클로저로 캡처)
+        def create_mousewheel_handler(target_canvas):
+            """마우스 휠 핸들러 팩토리 함수 - Canvas 참조를 캡처"""
+            def on_mousewheel(event):
+                """마우스 휠 스크롤 처리 (멀티 플랫폼 지원)"""
+                try:
+                    # Windows/macOS에서 event.delta 사용
+                    if sys.platform.startswith('win') or sys.platform == 'darwin':
+                        delta = event.delta
+                        if delta > 0:
+                            target_canvas.yview_scroll(-1, "units")  # 위로 스크롤
+                        elif delta < 0:
+                            target_canvas.yview_scroll(1, "units")   # 아래로 스크롤
+                    else:
+                        # Linux: Button-4 (위) / Button-5 (아래)
+                        if event.num == 4:
+                            target_canvas.yview_scroll(-1, "units")  # 위로 스크롤
+                        elif event.num == 5:
+                            target_canvas.yview_scroll(1, "units")   # 아래로 스크롤
+
+                    # 스크롤 후 포커스 유지
+                    target_canvas.focus_set()
+                    return "break"  # ✅ 이벤트 전파 중단
+                except Exception as e:
+                    if hasattr(self, '_debug') and self._debug:
+                        print(f"[DEBUG] 마우스 휠 스크롤 처리 실패: {e}")
+            return on_mousewheel
+
+        def create_linux_mousewheel_handlers(target_canvas):
+            """Linux용 마우스 휠 핸들러 팩토리 함수"""
+            def on_linux_mousewheel_up(event):
+                """Linux 마우스 휠 위로 스크롤"""
+                target_canvas.yview_scroll(-1, "units")
+                target_canvas.focus_set()
+                return "break"
+
+            def on_linux_mousewheel_down(event):
+                """Linux 마우스 휠 아래로 스크롤"""
+                target_canvas.yview_scroll(1, "units")
+                target_canvas.focus_set()
+                return "break"
+
+            return on_linux_mousewheel_up, on_linux_mousewheel_down
+
+        # 핸들러 인스턴스 생성
+        mousewheel_handler = create_mousewheel_handler(canvas)
+        linux_up_handler, linux_down_handler = create_linux_mousewheel_handlers(canvas)
+
+        # ✅ 포커스 및 마우스 이벤트 관리
+        def on_canvas_click(event):
+            """캔버스 클릭 시 포커스 설정"""
+            canvas.focus_set()
+
+        def on_canvas_focus(event):
+            """마우스가 캔버스 영역에 들어올 때 포커스 설정"""
+            canvas.focus_set()
+
+        # 기본 이벤트 바인딩
         scrollable_frame.bind('<Configure>', configure_scroll_region)
         canvas.bind('<Configure>', configure_canvas_width)
-        canvas.bind_all('<MouseWheel>', on_mousewheel)
+
+        # 동적 크기 조정 이벤트 바인딩
+        scrollable_frame.bind('<Map>', lambda e: on_content_change())
+        scrollable_frame.bind('<Unmap>', lambda e: on_content_change())
+
+        # ✅ 정적 마우스 휠 이벤트 바인딩 (항상 활성화)
+        if sys.platform.startswith('win') or sys.platform == 'darwin':
+            canvas.bind('<MouseWheel>', mousewheel_handler)
+        else:  # Linux
+            canvas.bind('<Button-4>', linux_up_handler)
+            canvas.bind('<Button-5>', linux_down_handler)
+
+        # 포커스 이벤트 바인딩
+        canvas.bind('<Enter>', on_canvas_focus)
+        canvas.bind('<Button-1>', on_canvas_click)  # 클릭 시 포커스 설정
+
+        # ✅ 외부에서 접근 가능한 마우스 휠 핸들러 저장 (TodoItemWidget에서 사용)
+        canvas._mousewheel_handler = mousewheel_handler
+        canvas._linux_up_handler = linux_up_handler
+        canvas._linux_down_handler = linux_down_handler
+
+        # 초기 Canvas 높이 조정
+        canvas.after_idle(adjust_canvas_height)
 
         # 섹션별로 참조 저장
         if section_type == 'pending':
@@ -846,8 +1078,9 @@ class TodoPanelApp:
             # 기존 방식으로 TODO 생성 후 수동으로 due_date 추가
             todo = self.todo_manager.create_todo(text)
             if due_date:
-                # 수동으로 due_date 필드 추가 후 업데이트
-                self.todo_manager.update_todo(todo['id'], due_date=due_date)
+                # 🔒 안전한 업데이트로 due_date 추가 (데이터 보존 보장)
+                update_method = getattr(self.todo_manager, 'update_todo_safe', self.todo_manager.update_todo)
+                update_method(todo['id'], due_date=due_date)
                 todo['due_date'] = due_date
             return todo
 
@@ -866,7 +1099,7 @@ class TodoPanelApp:
     def _load_todos(self):
         """TODO 목록 로드 및 표시 (섹션별 분리)"""
         try:
-            todos = self.todo_manager.read_todos()
+            todos = self.todo_manager.get_todos()
 
             # 기존 위젯들 정리
             for widget in list(self.pending_widgets.values()) + list(self.completed_widgets.values()):
@@ -888,7 +1121,7 @@ class TodoPanelApp:
             self._update_status()
             self._update_section_titles()
 
-        except TodoManagerError as e:
+        except Exception as e:
             messagebox.showerror("오류", f"TODO 목록을 불러오는데 실패했습니다: {e}")
 
     def _create_todo_widget(self, todo_data: Dict[str, Any], section=None):
@@ -910,6 +1143,11 @@ class TodoPanelApp:
         )
         widget.pack(fill=tk.X, pady=1)
 
+        # ✅ 마우스 휠 스크롤 바인딩 - 모든 자식 위젯에 Canvas 스크롤 적용
+        target_canvas = self.pending_canvas if section == 'pending' else self.completed_canvas
+        if target_canvas:
+            widget.bind_mousewheel_to_canvas(target_canvas)
+
         # 섹션별 관리
         if section == 'pending':
             self.pending_widgets[todo_data['id']] = widget
@@ -928,9 +1166,11 @@ class TodoPanelApp:
         self.completed_section.update_title(f"✅ 완료된 할일 ({completed_count}개)")
 
     def _update_todo(self, todo_id: str, **kwargs):
-        """TODO 업데이트 (섹션 이동 처리)"""
+        """TODO 업데이트 (섹션 이동 처리) - 완전한 데이터 보존"""
         try:
-            success = self.todo_manager.update_todo(todo_id, **kwargs)
+            # 🔒 중앙집중식 데이터 보존을 위해 update_todo_safe 사용
+            # 납기일, 우선순위 등 모든 메타데이터가 자동으로 보존
+            success = getattr(self.todo_manager, 'update_todo_safe', self.todo_manager.update_todo)(todo_id, **kwargs)
             if success:
                 # 완료 상태 변경 시 섹션 이동
                 if 'completed' in kwargs:
@@ -947,7 +1187,7 @@ class TodoPanelApp:
             else:
                 messagebox.showerror("오류", "TODO 업데이트에 실패했습니다.")
 
-        except TodoManagerError as e:
+        except Exception as e:
             messagebox.showerror("오류", f"TODO 업데이트에 실패했습니다: {e}")
 
     def _move_todo_between_sections(self, todo_id: str, completed: bool):
@@ -992,7 +1232,7 @@ class TodoPanelApp:
             else:
                 messagebox.showerror("오류", "TODO 삭제에 실패했습니다.")
 
-        except TodoManagerError as e:
+        except Exception as e:
             messagebox.showerror("오류", f"TODO 삭제 중 오류가 발생했습니다: {e}")
 
     def _reorder_todo(self, todo_id: str, move_steps: int):
@@ -1025,7 +1265,7 @@ class TodoPanelApp:
                 if success:
                     self._load_todos()  # 전체 리스트 다시 로드
 
-        except TodoManagerError as e:
+        except Exception as e:
             messagebox.showerror("오류", f"TODO 순서 변경에 실패했습니다: {e}")
 
     def _clear_completed(self):
@@ -1051,7 +1291,7 @@ class TodoPanelApp:
                     self._load_todos()
                     messagebox.showinfo("완료", f"{count}개의 완료된 항목을 삭제했습니다.")
 
-        except TodoManagerError as e:
+        except Exception as e:
             messagebox.showerror("오류", f"완료된 항목 정리에 실패했습니다: {e}")
 
     def _toggle_always_on_top(self):
@@ -1116,23 +1356,19 @@ class TodoPanelApp:
             dev_label.pack()
 
             # kochim.com 버튼
+            website_style = get_button_style('primary')
             website_btn = tk.Button(main_frame,
                                    text="🌐 kochim.com 방문하기",
                                    command=self._open_kochim_website,
-                                   font=('Segoe UI', 10, 'bold'),
-                                   bg=colors['accent'],
-                                   fg='white',
-                                   padx=20, pady=10)
+                                   **website_style)
             website_btn.pack(pady=15)
 
             # 닫기 버튼
+            close_style = get_button_style('secondary')
             close_btn = tk.Button(main_frame,
                                  text="닫기",
                                  command=about_window.destroy,
-                                 font=('Segoe UI', 9),
-                                 bg=colors['button_bg'],
-                                 fg=colors['text'],
-                                 padx=20, pady=5)
+                                 **close_style)
             close_btn.pack()
 
         except Exception as e:

@@ -1,17 +1,29 @@
 """
-Windows TODO 패널 메인 애플리케이션
+Windows TODO 패널 메인 애플리케이션 - CLEAN 아키텍처 통합
 
-시스템 트레이 통합, 단일 인스턴스 보장, 완전한 에러 처리를 포함한
-완전한 TODO 패널 애플리케이션입니다.
+🏛️ CLEAN Architecture Application Entry Point:
+==============================================
+완전한 의존성 역전과 시스템 트레이 통합을 가진 TODO 패널 애플리케이션입니다.
+모든 의존성은 DI Container에서 해결되며 Interface를 통해서만 상호작용합니다.
 
-Features:
+🎯 핵심 기능:
+============
+- CLEAN 아키텍처 완전 구현
+- 의존성 주입 컨테이너 (DI Container)
 - 시스템 트레이 통합 (pystray)
-- 창 닫기 시 트레이로 최소화
-- 트레이 아이콘 클릭으로 창 표시/숨기기
-- 우클릭 컨텍스트 메뉴
 - 단일 인스턴스 보장
+- 창 닫기 시 트레이로 최소화
 - 동적 트레이 아이콘 생성
 - 완전한 에러 처리 및 로깅
+- Magic UI 스타일링
+
+🔄 아키텍처 플로우:
+==================
+Main → Bootstrap → DI Container → Service Injection → UI Creation
+
+🚀 실행 방법:
+============
+python main.py [--debug] [--reset]
 """
 
 import sys
@@ -21,478 +33,493 @@ import time
 import socket
 import logging
 import traceback
+import argparse
 from pathlib import Path
 from typing import Optional, Callable
 import tkinter as tk
-from tkinter import messagebox
-import webbrowser
 
+# 필수 패키지 확인
 try:
     import pystray
     from PIL import Image, ImageDraw, ImageFont
+    import psutil
 except ImportError as e:
     print(f"필수 패키지가 설치되지 않았습니다: {e}")
-    print("다음 명령어로 설치하세요: pip install pystray Pillow")
+    print("다음 명령어로 설치하세요: pip install pystray Pillow psutil")
     sys.exit(1)
 
+# CLEAN 아키텍처 모듈들
 try:
-    import psutil
-except ImportError:
-    print("psutil 패키지가 필요합니다: pip install psutil")
-    sys.exit(1)
-
-# 로컬 모듈 임포트
-try:
-    from ui_components import TodoPanelApp
-    from todo_manager import TodoManager, TodoManagerError
+    from app_bootstrap import create_application, reset_application
+    from ui.main_app import TodoPanelApp
+    from interfaces import ITodoService, INotificationService
 except ImportError as e:
-    print(f"로컬 모듈을 찾을 수 없습니다: {e}")
+    print(f"CLEAN 아키텍처 모듈을 찾을 수 없습니다: {e}")
     print("src 폴더에서 실행하거나 PYTHONPATH를 설정하세요.")
+    print("현재 경로:", os.getcwd())
+    print("Python 경로:", sys.path)
     sys.exit(1)
 
+# 로깅 설정
+def setup_logging(debug: bool = False):
+    """로깅 시스템 설정"""
+    log_level = logging.DEBUG if debug else logging.INFO
 
-class LogManager:
-    """로깅 관리자"""
-    
-    def __init__(self, debug: bool = False):
-        self.debug = debug
-        self._setup_logging()
-    
-    def _setup_logging(self):
-        """로깅 설정"""
-        try:
-            # 로그 디렉토리 생성
-            appdata_local = os.environ.get('LOCALAPPDATA', os.path.expanduser('~\\AppData\\Local'))
-            log_dir = Path(appdata_local) / 'TodoPanel' / 'logs'
-            log_dir.mkdir(parents=True, exist_ok=True)
-            
-            log_file = log_dir / 'todo_panel.log'
-            
-            # 로거 설정
-            log_level = logging.DEBUG if self.debug else logging.INFO
-            logging.basicConfig(
-                level=log_level,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                handlers=[
-                    logging.FileHandler(log_file, encoding='utf-8'),
-                    logging.StreamHandler(sys.stdout) if self.debug else logging.NullHandler()
-                ]
-            )
-            
-            self.logger = logging.getLogger('TodoPanel')
-            self.logger.info("로깅 시스템 초기화 완료")
-            
-        except Exception as e:
-            print(f"로깅 설정 실패: {e}")
-            # 기본 로거 사용
-            logging.basicConfig(level=logging.INFO)
-            self.logger = logging.getLogger('TodoPanel')
-    
-    def info(self, message: str):
-        """정보 로그"""
-        self.logger.info(message)
-    
-    def error(self, message: str, exc_info=None):
-        """에러 로그"""
-        self.logger.error(message, exc_info=exc_info)
-    
-    def debug(self, message: str):
-        """디버그 로그"""
-        self.logger.debug(message)
+    # 로그 디렉토리 생성
+    log_dir = Path(os.path.expanduser("~")) / "AppData" / "Local" / "TodoPanel" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    # 로그 파일 경로
+    log_file = log_dir / "todo_panel.log"
+
+    # 로깅 포맷 설정
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+    # 루트 로거 설정
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        handlers=[
+            logging.FileHandler(log_file, encoding='utf-8'),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"로깅 시스템 초기화 완료 - 레벨: {log_level}")
+    logger.info(f"로그 파일: {log_file}")
+
+    return logger
 
 
-class SingleInstanceManager:
-    """단일 인스턴스 보장 관리자"""
-    
+class SingleInstanceChecker:
+    """
+    단일 인스턴스 확인자
+
+    🔒 동시 실행 방지:
+    =================
+    포트 기반 락을 사용하여 동일한 애플리케이션이
+    여러 번 실행되는 것을 방지합니다.
+    """
+
     def __init__(self, port: int = 65432):
         self.port = port
         self.socket = None
-        self.logger = logging.getLogger('TodoPanel.SingleInstance')
-    
-    def is_already_running(self) -> bool:
+
+    def is_running(self) -> bool:
         """다른 인스턴스가 실행 중인지 확인"""
         try:
-            # 소켓을 사용한 락 메커니즘
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.bind(('localhost', self.port))
-            self.logger.info(f"단일 인스턴스 락 획득 (포트: {self.port})")
-            return False
+            self.socket.bind(('127.0.0.1', self.port))
+            return False  # 바인딩 성공 = 다른 인스턴스 없음
         except OSError:
-            self.logger.info(f"다른 인스턴스가 이미 실행 중 (포트: {self.port})")
-            return True
-    
+            return True  # 바인딩 실패 = 다른 인스턴스 실행 중
+
     def cleanup(self):
         """리소스 정리"""
         if self.socket:
             try:
                 self.socket.close()
-                self.logger.info("단일 인스턴스 락 해제")
             except:
                 pass
 
 
-class TrayIconGenerator:
-    """트레이 아이콘 생성기"""
-    
-    @staticmethod
-    def create_icon(size: int = 64, color: str = "#007acc") -> Image.Image:
-        """동적으로 트레이 아이콘 생성"""
+class TrayIconManager:
+    """
+    시스템 트레이 아이콘 관리자
+
+    🎨 동적 아이콘 생성:
+    ===================
+    PIL을 사용하여 런타임에 아이콘을 생성하고
+    TODO 상태에 따라 동적으로 업데이트할 수 있습니다.
+    """
+
+    def __init__(self, app_controller: 'MainApplication'):
+        self.app_controller = app_controller
+        self.tray = None
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def create_icon_image(self) -> Image.Image:
+        """트레이 아이콘 이미지 생성"""
         try:
-            # 이미지 생성
-            image = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(image)
-            
+            # 32x32 아이콘 생성
+            img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+
             # 배경 원 그리기
-            margin = 4
-            circle_bbox = [margin, margin, size - margin, size - margin]
-            draw.ellipse(circle_bbox, fill=color, outline="white", width=2)
-            
-            # 체크 마크 그리기
-            check_color = "white"
-            check_width = max(2, size // 16)
-            
-            # 체크 마크 좌표 계산
-            center_x, center_y = size // 2, size // 2
-            check_size = size // 3
-            
-            # 체크 마크 그리기 (간단한 V 자 형태)
-            check_points = [
-                (center_x - check_size // 2, center_y),
-                (center_x - check_size // 4, center_y + check_size // 3),
-                (center_x + check_size // 2, center_y - check_size // 3)
-            ]
-            
-            for i in range(len(check_points) - 1):
-                draw.line([check_points[i], check_points[i + 1]], 
-                         fill=check_color, width=check_width)
-            
-            return image
-            
+            draw.ellipse([4, 4, 28, 28], fill=(33, 150, 243, 255), outline=(21, 101, 192, 255))
+
+            # 체크마크 그리기
+            draw.line([(10, 16), (14, 20), (22, 12)], fill=(255, 255, 255, 255), width=2)
+
+            return img
         except Exception as e:
-            logging.getLogger('TodoPanel.TrayIcon').error(f"트레이 아이콘 생성 실패: {e}")
-            # 기본 아이콘 반환
-            return TrayIconGenerator._create_fallback_icon(size)
-    
-    @staticmethod
-    def _create_fallback_icon(size: int = 64) -> Image.Image:
-        """기본 아이콘 생성"""
-        image = Image.new('RGBA', (size, size), (0, 100, 200, 255))
-        draw = ImageDraw.Draw(image)
-        
-        # 간단한 사각형
-        margin = size // 4
-        draw.rectangle([margin, margin, size - margin, size - margin], 
-                      fill="white", outline="black", width=2)
-        
-        return image
+            self.logger.error(f"아이콘 생성 실패: {e}")
+            # 폴백: 간단한 아이콘
+            img = Image.new('RGBA', (32, 32), (33, 150, 243, 255))
+            return img
 
+    def create_context_menu(self) -> pystray.Menu:
+        """컨텍스트 메뉴 생성"""
+        return pystray.Menu(
+            pystray.MenuItem(
+                "TODO Panel 표시",
+                self.app_controller.show_window,
+                default=True
+            ),
+            pystray.MenuItem(
+                "TODO Panel 숨기기",
+                self.app_controller.hide_window
+            ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "더 많은 유용한 도구들",
+                self._open_website
+            ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "종료",
+                self.app_controller.quit_application
+            )
+        )
 
-class SystemTrayManager:
-    """시스템 트레이 관리자"""
-    
-    def __init__(self, on_show: Callable, on_exit: Callable):
-        self.on_show = on_show
-        self.on_exit = on_exit
-        self.logger = logging.getLogger('TodoPanel.SystemTray')
-        self.tray_icon = None
-        self.icon_image = None
-        
-        self._create_tray_icon()
-    
-    def _create_tray_icon(self):
-        """트레이 아이콘 생성"""
+    def _open_website(self, icon, item):
+        """웹사이트 열기"""
+        import webbrowser
+        webbrowser.open("https://kochim.com")
+        self.logger.info("kochim.com 웹사이트 열기")
+
+    def setup_tray(self):
+        """시스템 트레이 설정"""
         try:
-            # 아이콘 이미지 생성
-            self.icon_image = TrayIconGenerator.create_icon()
-            
-            # 메뉴 생성
-            menu = pystray.Menu(
-                pystray.MenuItem("TODO Panel 열기", self._on_show_clicked, default=True),
-                pystray.MenuItem("---", None),  # 구분선
-                pystray.MenuItem("더 많은 유용한 도구들", self._on_visit_kochim),
-                pystray.MenuItem("---", None),  # 구분선
-                pystray.MenuItem("종료", self._on_exit_clicked)
+            icon_image = self.create_icon_image()
+            menu = self.create_context_menu()
+
+            self.tray = pystray.Icon(
+                name="TodoPanel",
+                icon=icon_image,
+                title="TODO Panel - CLEAN Architecture",
+                menu=menu
             )
-            
-            # 트레이 아이콘 생성
-            self.tray_icon = pystray.Icon(
-                "TodoPanel",
-                self.icon_image,
-                "TODO Panel",
-                menu
-            )
-            
-            self.logger.info("시스템 트레이 아이콘 생성 완료")
-            
+
+            # 트레이 아이콘 클릭 이벤트
+            self.tray.left_click = self.app_controller.toggle_window
+
+            self.logger.info("시스템 트레이 아이콘 설정 완료")
+
         except Exception as e:
-            self.logger.error(f"트레이 아이콘 생성 실패: {e}", exc_info=True)
+            self.logger.error(f"트레이 아이콘 설정 실패: {e}")
             raise
-    
-    def _on_show_clicked(self, icon, item):
-        """트레이 메뉴 '열기' 클릭"""
-        self.logger.debug("트레이 메뉴 '열기' 클릭됨")
-        if self.on_show:
-            self.on_show()
-    
-    def _on_visit_kochim(self, icon, item):
-        """트레이 메뉴 'kochim.com 방문' 클릭"""
-        try:
-            self.logger.info("kochim.com 방문 요청됨")
-            webbrowser.open("https://kochim.com")
-            self.logger.info("kochim.com이 브라우저에서 열림")
-        except Exception as e:
-            self.logger.error(f"웹사이트 열기 실패: {e}", exc_info=True)
-    
-    def _on_exit_clicked(self, icon, item):
-        """트레이 메뉴 '종료' 클릭"""
-        self.logger.info("애플리케이션 종료 요청됨")
-        if self.on_exit:
-            self.on_exit()
-    
+
     def run_tray(self):
-        """트레이 아이콘 실행 (블로킹)"""
+        """트레이 아이콘 실행 (별도 스레드)"""
         try:
-            if self.tray_icon:
-                self.logger.info("시스템 트레이 시작")
-                self.tray_icon.run()
+            if self.tray:
+                self.logger.info("시스템 트레이 실행 시작")
+                self.tray.run()
+            else:
+                self.logger.error("트레이 아이콘이 설정되지 않았습니다")
         except Exception as e:
-            self.logger.error(f"트레이 실행 중 오류: {e}", exc_info=True)
-    
+            self.logger.error(f"트레이 실행 중 오류: {e}")
+
     def stop_tray(self):
         """트레이 아이콘 중지"""
         try:
-            if self.tray_icon:
-                self.tray_icon.stop()
+            if self.tray:
+                self.tray.stop()
                 self.logger.info("시스템 트레이 중지")
         except Exception as e:
-            self.logger.error(f"트레이 중지 중 오류: {e}", exc_info=True)
+            self.logger.error(f"트레이 중지 중 오류: {e}")
 
 
 class MainApplication:
-    """메인 애플리케이션 관리자"""
-    
+    """
+    CLEAN 아키텍처 메인 애플리케이션 컨트롤러
+
+    🏛️ 애플리케이션 조율자:
+    =======================
+    UI, 비즈니스 로직, Infrastructure의 생명주기를 관리하고
+    시스템 트레이와의 통합을 담당합니다.
+
+    🎯 책임 분리:
+    ============
+    - UI 생명주기 관리
+    - 시스템 트레이 통합
+    - 애플리케이션 설정 관리
+    - 에러 처리 및 로깅
+    """
+
     def __init__(self, debug: bool = False):
         self.debug = debug
-        self.log_manager = LogManager(debug)
-        self.logger = logging.getLogger('TodoPanel.Main')
-        
-        # 컴포넌트들
-        self.instance_manager = None
-        self.tray_manager = None
-        self.todo_app = None
-        self.tray_thread = None
-        
-        # 상태 변수
-        self.is_running = True
-        self.is_window_hidden = False
-        
-        self.logger.info(f"메인 애플리케이션 초기화 시작 (디버그 모드: {debug})")
-    
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+        # 핵심 컴포넌트들
+        self.todo_app: Optional[TodoPanelApp] = None
+        self.root: Optional[tk.Tk] = None
+        self.tray_manager: Optional[TrayIconManager] = None
+        self.instance_checker: Optional[SingleInstanceChecker] = None
+
+        # 상태 관리
+        self.is_visible = True
+        self.is_shutting_down = False
+
+        self.logger.info("MainApplication 초기화")
+
     def initialize(self) -> bool:
-        """애플리케이션 초기화"""
+        """
+        애플리케이션 초기화
+
+        🚀 초기화 순서:
+        ==============
+        1. 단일 인스턴스 확인
+        2. CLEAN 아키텍처 애플리케이션 생성
+        3. 시스템 트레이 설정
+        4. 이벤트 바인딩
+
+        Returns:
+            초기화 성공 여부
+        """
         try:
             # 1. 단일 인스턴스 확인
-            self.instance_manager = SingleInstanceManager()
-            if self.instance_manager.is_already_running():
-                self.logger.info("다른 인스턴스가 이미 실행 중입니다.")
-                messagebox.showwarning(
-                    "TODO Panel", 
-                    "TODO Panel이 이미 실행 중입니다.\n시스템 트레이를 확인해주세요."
-                )
+            self.instance_checker = SingleInstanceChecker()
+            if self.instance_checker.is_running():
+                self.logger.warning("이미 실행 중인 TODO Panel이 있습니다")
                 return False
-            
-            # 2. TODO 앱 생성
-            self.todo_app = TodoPanelApp()
-            self._setup_todo_app()
-            
-            # 3. 시스템 트레이 설정
-            self.tray_manager = SystemTrayManager(
-                on_show=self._show_window,
-                on_exit=self._exit_application
-            )
-            
-            self.logger.info("애플리케이션 초기화 완료")
+
+            # 2. CLEAN 아키텍처 애플리케이션 생성
+            self.logger.info("CLEAN 아키텍처 애플리케이션 생성 중...")
+            self.todo_app = create_application(debug=self.debug)
+            self.root = self.todo_app.root
+
+            # 3. 윈도우 이벤트 바인딩
+            self._setup_window_events()
+
+            # 4. 시스템 트레이 설정
+            self.tray_manager = TrayIconManager(self)
+            self.tray_manager.setup_tray()
+
+            self.logger.info("메인 애플리케이션 초기화 완료")
             return True
-            
+
         except Exception as e:
-            self.logger.error(f"애플리케이션 초기화 실패: {e}", exc_info=True)
-            messagebox.showerror("초기화 오류", f"애플리케이션 초기화에 실패했습니다:\n{e}")
+            self.logger.error(f"애플리케이션 초기화 실패: {e}")
+            self.logger.error(traceback.format_exc())
             return False
-    
-    def _setup_todo_app(self):
-        """TODO 앱 설정"""
-        if not self.todo_app:
-            return
-        
-        # 창 닫기 이벤트를 트레이로 최소화로 변경
-        self.todo_app.root.protocol("WM_DELETE_WINDOW", self._hide_to_tray)
-        
-        # 윈도우 아이콘 설정 (가능한 경우)
-        self._set_window_icon()
-        
-        # 창 상태 이벤트 바인딩
-        self.todo_app.root.bind('<Unmap>', self._on_window_unmap)
-        self.todo_app.root.bind('<Map>', self._on_window_map)
-        
-        self.logger.info("TODO 앱 설정 완료")
-    
-    def _set_window_icon(self):
-        """윈도우 아이콘 설정"""
+
+    def _setup_window_events(self):
+        """윈도우 이벤트 설정"""
+        if self.root:
+            # 창 닫기 이벤트 (트레이로 최소화)
+            self.root.protocol("WM_DELETE_WINDOW", self.on_window_closing)
+
+            # 창 상태 변경 이벤트
+            self.root.bind("<Unmap>", self.on_window_unmap)
+            self.root.bind("<Map>", self.on_window_map)
+
+    def run(self):
+        """
+        애플리케이션 실행
+
+        🔄 실행 플로우:
+        ==============
+        1. 트레이 아이콘 스레드 시작
+        2. Tkinter 메인 루프 실행
+        3. 종료 시 리소스 정리
+        """
         try:
-            # PIL 이미지를 tkinter에서 사용할 수 있는 형태로 변환
-            icon_image = TrayIconGenerator.create_icon(32)
-            
-            # 임시 파일로 저장 후 아이콘 설정 (Windows에서 동작하는 방법)
-            temp_icon_path = Path.cwd() / "temp_icon.ico"
-            icon_image.save(temp_icon_path, format='ICO')
-            
-            self.todo_app.root.iconbitmap(str(temp_icon_path))
-            
-            # 임시 파일 삭제
-            try:
-                temp_icon_path.unlink()
-            except:
-                pass
-                
-        except Exception as e:
-            self.logger.debug(f"윈도우 아이콘 설정 실패 (무시됨): {e}")
-    
-    def _hide_to_tray(self):
-        """창을 트레이로 숨기기"""
-        try:
-            self.todo_app.root.withdraw()
-            self.is_window_hidden = True
-            self.logger.debug("창이 트레이로 숨겨짐")
-            
-            # 처음 숨길 때 알림 표시
-            if hasattr(self, '_first_hide') and not self._first_hide:
-                self._show_tray_notification()
-                self._first_hide = True
-                
-        except Exception as e:
-            self.logger.error(f"창 숨기기 실패: {e}", exc_info=True)
-    
-    def _show_window(self):
-        """창 표시"""
-        try:
-            if self.is_window_hidden:
-                self.todo_app.root.deiconify()
-                self.todo_app.root.lift()
-                self.todo_app.root.focus_force()
-                self.is_window_hidden = False
-                self.logger.debug("창이 표시됨")
+            # 트레이 아이콘을 별도 스레드에서 실행
+            if self.tray_manager:
+                tray_thread = threading.Thread(
+                    target=self.tray_manager.run_tray,
+                    daemon=True
+                )
+                tray_thread.start()
+                self.logger.info("트레이 아이콘 스레드 시작")
+
+            # 메인 UI 실행
+            if self.todo_app:
+                self.logger.info("TODO Panel 메인 루프 시작")
+                self.todo_app.run()
             else:
-                # 이미 보이는 경우 포커스만
-                self.todo_app.root.lift()
-                self.todo_app.root.focus_force()
-                
+                self.logger.error("TODO 애플리케이션이 초기화되지 않았습니다")
+
         except Exception as e:
-            self.logger.error(f"창 표시 실패: {e}", exc_info=True)
-    
-    def _show_tray_notification(self):
-        """트레이 알림 표시"""
+            self.logger.error(f"애플리케이션 실행 중 오류: {e}")
+            self.logger.error(traceback.format_exc())
+        finally:
+            self.cleanup()
+
+    def on_window_closing(self):
+        """창 닫기 이벤트 처리 (트레이로 최소화)"""
+        self.logger.debug("창 닫기 요청 - 트레이로 최소화")
+        self.hide_window()
+
+    def on_window_unmap(self, event):
+        """창 숨김 이벤트"""
+        if event.widget == self.root:
+            self.is_visible = False
+            self.logger.debug("창이 숨겨짐")
+
+    def on_window_map(self, event):
+        """창 표시 이벤트"""
+        if event.widget == self.root:
+            self.is_visible = True
+            self.logger.debug("창이 표시됨")
+
+    def show_window(self, icon=None, item=None):
+        """창 표시"""
+        if self.root and not self.is_shutting_down:
+            try:
+                self.root.deiconify()
+                self.root.lift()
+                self.root.focus_force()
+                self.is_visible = True
+                self.logger.debug("창 표시")
+            except Exception as e:
+                self.logger.error(f"창 표시 실패: {e}")
+
+    def hide_window(self, icon=None, item=None):
+        """창 숨기기"""
+        if self.root and not self.is_shutting_down:
+            try:
+                self.root.withdraw()
+                self.is_visible = False
+                self.logger.debug("창 숨김")
+            except Exception as e:
+                self.logger.error(f"창 숨김 실패: {e}")
+
+    def toggle_window(self, icon=None, item=None):
+        """창 표시/숨김 토글"""
+        if self.is_visible:
+            self.hide_window()
+        else:
+            self.show_window()
+
+    def quit_application(self, icon=None, item=None):
+        """애플리케이션 완전 종료"""
+        self.logger.info("애플리케이션 종료 요청")
+        self.is_shutting_down = True
+
         try:
-            if hasattr(self.tray_manager, 'tray_icon') and self.tray_manager.tray_icon:
-                # 간단한 방법으로 알림 (시스템 지원 여부에 따라 동작)
-                pass
-        except Exception as e:
-            self.logger.debug(f"트레이 알림 표시 실패: {e}")
-    
-    def _on_window_unmap(self, event):
-        """윈도우가 숨겨질 때"""
-        if event.widget == self.todo_app.root:
-            self.is_window_hidden = True
-    
-    def _on_window_map(self, event):
-        """윈도우가 표시될 때"""
-        if event.widget == self.todo_app.root:
-            self.is_window_hidden = False
-    
-    def _exit_application(self):
-        """애플리케이션 종료"""
-        try:
-            self.logger.info("애플리케이션 종료 시작")
-            self.is_running = False
-            
-            # 트레이 중지
+            # 트레이 아이콘 중지
             if self.tray_manager:
                 self.tray_manager.stop_tray()
-            
-            # TODO 앱 종료
-            if self.todo_app and self.todo_app.root:
-                self.todo_app.root.quit()
-                self.todo_app.root.destroy()
-            
-            # 단일 인스턴스 매니저 정리
-            if self.instance_manager:
-                self.instance_manager.cleanup()
-            
-            self.logger.info("애플리케이션 종료 완료")
-            
+
+            # Tkinter 종료
+            if self.root:
+                self.root.quit()
+                self.root.destroy()
+
         except Exception as e:
-            self.logger.error(f"애플리케이션 종료 중 오류: {e}", exc_info=True)
-        finally:
-            # 강제 종료
-            sys.exit(0)
-    
-    def run(self):
-        """애플리케이션 실행"""
+            self.logger.error(f"종료 중 오류: {e}")
+
+    def cleanup(self):
+        """리소스 정리"""
+        self.logger.info("리소스 정리 시작")
+
         try:
-            # 초기화
-            if not self.initialize():
-                return
-            
-            # 트레이 아이콘을 별도 스레드에서 실행
-            self.tray_thread = threading.Thread(
-                target=self.tray_manager.run_tray,
-                daemon=True
-            )
-            self.tray_thread.start()
-            
-            # 처음 숨기기 플래그 초기화
-            self._first_hide = False
-            
-            # 메인 GUI 루프 실행
-            self.logger.info("메인 애플리케이션 루프 시작")
-            self.todo_app.run()
-            
-        except KeyboardInterrupt:
-            self.logger.info("키보드 인터럽트로 종료")
+            # 단일 인스턴스 체커 정리
+            if self.instance_checker:
+                self.instance_checker.cleanup()
+
+            # CLEAN 아키텍처 정리
+            reset_application()
+
+            self.logger.info("리소스 정리 완료")
+
         except Exception as e:
-            self.logger.error(f"애플리케이션 실행 중 오류: {e}", exc_info=True)
-            messagebox.showerror("실행 오류", f"애플리케이션 실행 중 오류가 발생했습니다:\n{e}")
-        finally:
-            self._exit_application()
+            self.logger.error(f"리소스 정리 중 오류: {e}")
+
+
+def parse_arguments():
+    """명령행 인수 파싱"""
+    parser = argparse.ArgumentParser(
+        description="TODO Panel - CLEAN Architecture",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+예시:
+  python main.py               # 일반 실행
+  python main.py --debug       # 디버그 모드
+  python main.py --reset       # 설정 리셋 후 실행
+        """
+    )
+
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='디버그 모드로 실행 (상세한 로깅)'
+    )
+
+    parser.add_argument(
+        '--reset',
+        action='store_true',
+        help='애플리케이션 설정 리셋'
+    )
+
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='TODO Panel v2.0 - CLEAN Architecture'
+    )
+
+    return parser.parse_args()
+
+
+def check_system_requirements():
+    """시스템 요구사항 확인"""
+    # Python 버전 확인
+    if sys.version_info < (3, 8):
+        print("Python 3.8 이상이 필요합니다")
+        return False
+
+    # Windows 확인
+    if os.name != 'nt':
+        print("이 애플리케이션은 Windows 환경에서만 실행됩니다")
+        return False
+
+    return True
 
 
 def main():
-    """메인 함수"""
-    # 디버그 모드 확인
-    debug_mode = '--debug' in sys.argv or '-d' in sys.argv
-    
-    try:
-        print("=== Windows TODO Panel 시작 ===")
-        if debug_mode:
-            print("디버그 모드로 실행됩니다.")
-        
-        # 메인 애플리케이션 생성 및 실행
-        app = MainApplication(debug=debug_mode)
-        app.run()
-        
-    except Exception as e:
-        print(f"치명적 오류: {e}")
-        traceback.print_exc()
-        
-        # GUI 오류 표시 (가능한 경우)
-        try:
-            root = tk.Tk()
-            root.withdraw()
-            messagebox.showerror("치명적 오류", f"애플리케이션을 시작할 수 없습니다:\n{e}")
-            root.destroy()
-        except:
-            pass
-        
+    """메인 진입점"""
+    print("TODO Panel - CLEAN Architecture")
+    print("=" * 50)
+
+    # 시스템 요구사항 확인
+    if not check_system_requirements():
         sys.exit(1)
+
+    # 명령행 인수 파싱
+    args = parse_arguments()
+
+    # 로깅 설정
+    logger = setup_logging(debug=args.debug)
+
+    try:
+        # 설정 리셋 처리
+        if args.reset:
+            logger.info("애플리케이션 설정 리셋")
+            reset_application()
+
+        # 메인 애플리케이션 생성 및 초기화
+        app = MainApplication(debug=args.debug)
+
+        if not app.initialize():
+            logger.error("애플리케이션 초기화 실패")
+            sys.exit(1)
+
+        # 애플리케이션 실행
+        logger.info("🚀 TODO Panel 실행 시작")
+        app.run()
+
+    except KeyboardInterrupt:
+        logger.info("사용자에 의해 중단됨")
+    except Exception as e:
+        logger.error(f"예상치 못한 오류: {e}")
+        logger.error(traceback.format_exc())
+        sys.exit(1)
+    finally:
+        logger.info("TODO Panel 종료")
 
 
 if __name__ == "__main__":

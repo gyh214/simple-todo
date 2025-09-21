@@ -44,7 +44,7 @@ a = Analysis(
     hiddenimports=[
         'pystray',
         'PIL',
-        'PIL.Image', 
+        'PIL.Image',
         'PIL.ImageDraw',
         'psutil',
         'tkinter',
@@ -54,7 +54,34 @@ a = Analysis(
         'json',
         'logging',
         'threading',
-        'datetime'
+        'datetime',
+        # UI 패키지 및 모듈들 (모든 새로운 기능 포함)
+        'ui',
+        'ui.widgets',
+        'ui.date_utils',
+        'ui.sort_manager',
+        'ui.main_app',
+        # 추가 UI 관련 모듈들
+        'ui_components',
+        'todo_manager',
+        # 새로 추가된 아키텍처 모듈들
+        'interfaces',
+        'di_container',
+        'app_bootstrap',
+        'data_preservation_service',
+        # 서비스 패키지
+        'services',
+        'services.todo_app_service',
+        'services.validation_service',
+        'services.notification_service',
+        'services.notification_service_simple',
+        # 인프라스트럭처 패키지
+        'infrastructure',
+        'infrastructure.system_service',
+        'infrastructure.file_service',
+        # 유틸리티 모듈들
+        'tooltip',
+        'run_todo_panel'
     ],
     
     # 훅 디렉토리 
@@ -69,8 +96,12 @@ a = Analysis(
     # 제외할 모듈들 (필요시)
     excludes=[
         'test_todo_manager',
-        'test_main', 
-        'simple_test'
+        'test_main',
+        'simple_test',
+        'test_integration',
+        'test_data_preservation',
+        'test_unified_manager',
+        'todo_manager_legacy_backup'
     ],
     
     # Win32 특정 옵션

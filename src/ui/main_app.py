@@ -760,18 +760,35 @@ class TodoPanelApp:
         self._set_entry_placeholder()
 
     def _setup_sections(self, parent):
-        """섹션 분할된 TODO 리스트 설정"""
-        # 섹션 컨테이너
-        sections_container = tk.Frame(parent, bg=DARK_COLORS['bg'])
-        sections_container.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+        """섹션 분할된 TODO 리스트 설정 (동적 크기조절 지원)"""
+        colors = DARK_COLORS
 
-        # 진행중인 할일 섹션
+        # PanedWindow로 동적 크기조절 구현
+        self.sections_paned_window = tk.PanedWindow(
+            parent,
+            orient=tk.VERTICAL,  # 세로 방향 분할
+            bg=colors['bg'],
+            bd=0,
+            sashwidth=6,  # 분할바 두께
+            sashrelief=tk.FLAT,
+            sashpad=2,
+            handlesize=8,
+            handlepad=10,
+            showhandle=True
+        )
+        self.sections_paned_window.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+
+        # 분할바 스타일링 (Magic UI 다크 테마)
+        self._style_paned_window_sash()
+
+        # 진행중인 할일 섹션 프레임
+        pending_frame = tk.Frame(self.sections_paned_window, bg=colors['bg'])
         self.pending_section = CollapsibleSection(
-            sections_container,
+            pending_frame,
             "📋 진행중인 할일 (0개)",
             initial_collapsed=False
         )
-        self.pending_section.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+        self.pending_section.pack(fill=tk.BOTH, expand=True)
 
         # 진행중 할일을 위한 스크롤 가능한 영역
         self._setup_scrollable_area(
@@ -779,19 +796,27 @@ class TodoPanelApp:
             'pending'
         )
 
-        # 완료된 할일 섹션 (기본적으로 접힘)
+        # 완료된 할일 섹션 프레임
+        completed_frame = tk.Frame(self.sections_paned_window, bg=colors['bg'])
         self.completed_section = CollapsibleSection(
-            sections_container,
+            completed_frame,
             "✅ 완료된 할일 (0개)",
-            initial_collapsed=True
+            initial_collapsed=False  # PanedWindow에서는 기본으로 펼쳐둠
         )
-        self.completed_section.pack(fill=tk.X, pady=(5, 0))
+        self.completed_section.pack(fill=tk.BOTH, expand=True)
 
         # 완료된 할일을 위한 스크롤 가능한 영역
         self._setup_scrollable_area(
             self.completed_section.get_content_frame(),
             'completed'
         )
+
+        # PanedWindow에 프레임들 추가
+        self.sections_paned_window.add(pending_frame, minsize=100, sticky="nsew")
+        self.sections_paned_window.add(completed_frame, minsize=80, sticky="nsew")
+
+        # 기본 분할 비율 설정 (진행중 70%, 완료 30%)
+        self.root.after(100, self._set_initial_pane_ratio)
 
     def _setup_scrollable_area(self, parent, section_type):
         """스크롤 가능한 영역 설정 (멀티 플랫폼 마우스 휠 지원)"""
@@ -1385,6 +1410,166 @@ class TodoPanelApp:
         except Exception as e:
             messagebox.showerror("웹사이트 열기 오류",
                                f"브라우저에서 kochim.com을 열 수 없습니다.\n\n오류: {e}")
+
+    def _style_paned_window_sash(self):
+        """PanedWindow 분할바 스타일링 (Magic UI 다크 테마)"""
+        try:
+            colors = DARK_COLORS
+
+            # 분할바 색상 설정
+            self.sections_paned_window.configure(
+                sashcursor='sb_v_double_arrow',  # 세로 리사이즈 커서
+                bg=colors['border'],  # 분할바 기본 색상
+                relief=tk.FLAT
+            )
+
+            # 분할바 호버 효과를 위한 바인딩
+            self.sections_paned_window.bind('<Enter>', self._on_sash_enter)
+            self.sections_paned_window.bind('<Leave>', self._on_sash_leave)
+            self.sections_paned_window.bind('<Button-1>', self._on_sash_click)
+            self.sections_paned_window.bind('<ButtonRelease-1>', self._on_sash_release)
+
+        except Exception as e:
+            if hasattr(self, '_debug') and self._debug:
+                print(f"[DEBUG] 분할바 스타일링 실패: {e}")
+
+    def _on_sash_enter(self, event):
+        """분할바 마우스 호버 시"""
+        try:
+            colors = DARK_COLORS
+            self.sections_paned_window.configure(bg=colors.get('accent', '#007acc'))
+        except:
+            pass
+
+    def _on_sash_leave(self, event):
+        """분할바 마우스 호버 해제 시"""
+        try:
+            colors = DARK_COLORS
+            self.sections_paned_window.configure(bg=colors['border'])
+        except:
+            pass
+
+    def _on_sash_click(self, event):
+        """분할바 클릭 시"""
+        try:
+            colors = DARK_COLORS
+            self.sections_paned_window.configure(bg=colors.get('accent_hover', '#005a9e'))
+        except:
+            pass
+
+    def _on_sash_release(self, event):
+        """분할바 클릭 해제 시"""
+        try:
+            colors = DARK_COLORS
+            self.sections_paned_window.configure(bg=colors['border'])
+            # 분할 비율 저장
+            self._save_pane_ratio()
+        except:
+            pass
+
+    def _set_initial_pane_ratio(self):
+        """초기 분할 비율 설정 (저장된 설정 또는 기본값 70%/30%)"""
+        try:
+            # 창 높이 계산
+            total_height = self.sections_paned_window.winfo_height()
+            if total_height < 50:  # 아직 레이아웃이 완료되지 않았으면 나중에 다시 시도
+                self.root.after(50, self._set_initial_pane_ratio)
+                return
+
+            # 저장된 분할 비율 불러오기 (기본값: 0.7)
+            saved_ratio = self._load_pane_ratio()
+
+            # 진행중인 할일 영역 높이 계산
+            pending_height = int(total_height * saved_ratio)
+
+            # sash 위치 설정 (첫 번째 구획의 높이)
+            self.sections_paned_window.sash_place(0, pending_height, 0)
+
+        except Exception as e:
+            if hasattr(self, '_debug') and self._debug:
+                print(f"[DEBUG] 초기 분할 비율 설정 실패: {e}")
+            # 실패 시 나중에 다시 시도
+            self.root.after(100, self._set_initial_pane_ratio)
+
+    def _save_pane_ratio(self):
+        """현재 분할 비율을 사용자 설정에 저장"""
+        try:
+            # 현재 분할 비율 계산
+            total_height = self.sections_paned_window.winfo_height()
+            if total_height < 50:
+                return  # 너무 작으면 저장하지 않음
+
+            # 첫 번째 패널(진행중 할일)의 높이 가져오기
+            sash_coord = self.sections_paned_window.sash_coord(0)
+            pending_height = sash_coord[1] if sash_coord else total_height * 0.7
+
+            # 비율 계산 (0.1 ~ 0.9 범위로 제한)
+            ratio = max(0.1, min(0.9, pending_height / total_height))
+
+            # 설정 파일에 저장
+            import json
+            from pathlib import Path
+            import os
+
+            # 설정 디렉토리 생성
+            config_dir = Path(os.path.expanduser("~")) / "AppData" / "Local" / "TodoPanel"
+            config_dir.mkdir(parents=True, exist_ok=True)
+
+            config_file = config_dir / "ui_settings.json"
+
+            # 기존 설정 로드
+            settings = {}
+            if config_file.exists():
+                try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        settings = json.load(f)
+                except:
+                    settings = {}
+
+            # 분할 비율 업데이트
+            settings['paned_window_ratio'] = ratio
+            settings['last_updated'] = datetime.now().isoformat()
+
+            # 설정 저장
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+
+            if hasattr(self, '_debug') and self._debug:
+                print(f"[DEBUG] 분할 비율 저장됨: {ratio:.2f}")
+
+        except Exception as e:
+            if hasattr(self, '_debug') and self._debug:
+                print(f"[DEBUG] 분할 비율 저장 실패: {e}")
+
+    def _load_pane_ratio(self):
+        """저장된 분할 비율을 불러오기 (기본값: 0.7)"""
+        try:
+            import json
+            from pathlib import Path
+            import os
+
+            config_file = Path(os.path.expanduser("~")) / "AppData" / "Local" / "TodoPanel" / "ui_settings.json"
+
+            if not config_file.exists():
+                return 0.7  # 기본값
+
+            with open(config_file, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+
+            ratio = settings.get('paned_window_ratio', 0.7)
+
+            # 유효한 범위인지 검증 (0.1 ~ 0.9)
+            ratio = max(0.1, min(0.9, ratio))
+
+            if hasattr(self, '_debug') and self._debug:
+                print(f"[DEBUG] 분할 비율 로드됨: {ratio:.2f}")
+
+            return ratio
+
+        except Exception as e:
+            if hasattr(self, '_debug') and self._debug:
+                print(f"[DEBUG] 분할 비율 로드 실패, 기본값 사용: {e}")
+            return 0.7  # 기본값
 
     def _update_status(self):
         """상태바 업데이트"""

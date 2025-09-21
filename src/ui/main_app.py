@@ -30,8 +30,10 @@ except ImportError as e:
 
 try:
     from .sort_manager import SortManager
+    from .sort_dropdown_widget import SortDropdownWidget
 except ImportError:
     SortManager = None
+    SortDropdownWidget = None
 
 try:
     from .date_utils import DateUtils
@@ -842,16 +844,23 @@ class TodoPanelApp:
         self.add_btn.pack(side=tk.LEFT, padx=(0, 8))
         ToolTip(self.add_btn, "새 할일 추가")
 
-        # 정렬 버튼
-        self.sort_btn = tk.Button(control_frame,
-                                 text='🔄',
-                                 command=self._toggle_sort,
-                                 font=('Segoe UI', 9),
-                                 bg=DARK_COLORS['button_bg'],
-                                 fg=DARK_COLORS['text'],
-                                 width=3, padx=5, pady=5)
-        self.sort_btn.pack(side=tk.RIGHT, padx=(4, 0))
-        self._update_sort_button()
+        # 정렬 드롭다운 (기존 토글 버튼 교체)
+        if SortDropdownWidget:
+            self.sort_dropdown = SortDropdownWidget(
+                control_frame,
+                self.sort_manager,
+                self._on_sort_changed
+            )
+            self.sort_dropdown.pack(side=tk.RIGHT, padx=(4, 0))
+        else:
+            # 폴백: 기본 정렬 버튼
+            self.sort_btn = tk.Button(control_frame,
+                                     text='🔄 정렬',
+                                     font=('Segoe UI', 9),
+                                     bg=DARK_COLORS['button_bg'],
+                                     fg=DARK_COLORS['text'],
+                                     padx=5, pady=5)
+            self.sort_btn.pack(side=tk.RIGHT, padx=(4, 0))
 
         # 우측 제어 버튼들
         # 항상 위 토글
@@ -1246,17 +1255,14 @@ class TodoPanelApp:
                 todo['due_date'] = due_date
             return todo
 
-    def _update_sort_button(self):
-        """정렬 버튼 상태 업데이트"""
-        sort_info = self.sort_manager.get_current_sort_info()
-        self.sort_btn.configure(text=sort_info['icon'])
-        ToolTip(self.sort_btn, sort_info['tooltip'])
+    def _on_sort_changed(self, option_key: str):
+        """정렬 옵션 변경 시 처리"""
+        # 정렬 적용을 위해 TODO 목록 다시 로드
+        self._load_todos()
 
-    def _toggle_sort(self):
-        """정렬 토글"""
-        self.sort_manager.get_next_sort_state()
-        self._update_sort_button()
-        self._load_todos()  # 정렬 적용을 위해 다시 로드
+        # 드롭다운 디스플레이 업데이트
+        if hasattr(self, 'sort_dropdown') and self.sort_dropdown:
+            self.sort_dropdown.update_display()
 
     def _load_todos(self):
         """TODO 목록 로드 및 표시 (섹션별 분리)"""
@@ -1398,7 +1404,7 @@ class TodoPanelApp:
             messagebox.showerror("오류", f"TODO 삭제 중 오류가 발생했습니다: {e}")
 
     def _reorder_todo(self, todo_id: str, move_steps: int):
-        """TODO 순서 변경"""
+        """TODO 순서 변경 (수동 모드 자동 전환)"""
         try:
             # 현재 위치 찾기 (섹션 내에서)
             widget = self.todo_widgets.get(todo_id)
@@ -1425,6 +1431,13 @@ class TodoPanelApp:
             if new_pos != current_pos:
                 success = self.todo_manager.reorder_todos(todo_id, new_pos)
                 if success:
+                    # 수동 순서 변경 시 자동으로 MANUAL 모드로 전환
+                    self.sort_manager.set_manual_mode()
+
+                    # 드롭다운 디스플레이 업데이트
+                    if hasattr(self, 'sort_dropdown') and self.sort_dropdown:
+                        self.sort_dropdown.update_display()
+
                     self._load_todos()  # 전체 리스트 다시 로드
 
         except Exception as e:

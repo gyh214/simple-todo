@@ -564,34 +564,30 @@ class UnifiedTodoManager(ITodoRepository):
             return todos
 
     def reorder_todos(self, todo_id: str, new_position: int) -> bool:
-        """TODO 항목의 위치를 변경 (드래그 앤 드롭)"""
+        """TODO 항목의 위치를 변경 (수동 모드 전용 - position 기반)"""
         if new_position < 0:
             raise TodoRepositoryError("position은 0 이상이어야 합니다", 'INVALID_POSITION')
 
         with self._lock:
+            # 해당 TODO 찾기
             todo_item = None
-            current_index = None
-
-            for i, todo in enumerate(self._todos):
+            for todo in self._todos:
                 if todo['id'] == todo_id:
                     todo_item = todo
-                    current_index = i
                     break
 
             if todo_item is None:
                 return False
 
-            # 리스트에서 제거하고 새 위치에 삽입
-            self._todos.pop(current_index)
-            new_position = max(0, min(new_position, len(self._todos)))
-            self._todos.insert(new_position, todo_item)
+            # 🚀 NEW: position 값만 직접 업데이트 (리스트 순서는 변경하지 않음)
+            # 이렇게 하면 _reindex_positions()로 인한 position 재할당 문제를 방지
+            old_position = todo_item.get('position', 0)
+            todo_item['position'] = new_position
 
-            # position 재인덱싱
-            self._reindex_positions()
             self._request_save()
 
             if self._debug:
-                logger.info(f"🔄 TODO 위치 변경: {todo_id[:8]}... -> {new_position}")
+                logger.info(f"🔄 TODO 위치 변경: {todo_id[:8]}... {old_position} -> {new_position}")
 
             return True
 
@@ -700,6 +696,48 @@ class UnifiedTodoManager(ITodoRepository):
             logger.error(f"백업 복구 실패: {e}")
 
         return False
+
+    def sync_positions_with_order(self, ordered_todos: List[Dict[str, Any]]) -> bool:
+        """
+        주어진 순서대로 position 값 동기화
+
+        🔄 Position 동기화:
+        ===================
+        화면에 표시된 순서대로 실제 저장된 position 값을 업데이트합니다.
+        수동 정렬 시 순서 불일치 문제를 해결하기 위한 핵심 메서드입니다.
+
+        Args:
+            ordered_todos: 원하는 순서로 정렬된 TODO 목록
+
+        Returns:
+            동기화 성공 여부
+        """
+        try:
+            with self._lock:
+                # ID 기반 매핑으로 빠른 검색 지원
+                todo_id_map = {todo['id']: todo for todo in self._todos}
+
+                updated_count = 0
+                for new_position, ordered_todo in enumerate(ordered_todos):
+                    todo_id = ordered_todo['id']
+                    if todo_id in todo_id_map:
+                        current_todo = todo_id_map[todo_id]
+                        if current_todo.get('position', 0) != new_position:
+                            current_todo['position'] = new_position
+                            updated_count += 1
+
+                # 변경사항이 있으면 저장
+                if updated_count > 0:
+                    self._request_save()
+
+                    if self._debug:
+                        logger.info(f"🔄 Position 동기화 완료: {updated_count}개 항목 업데이트")
+
+                return True
+
+        except Exception as e:
+            logger.error(f"❌ Position 동기화 실패: {e}")
+            return False
 
     # ============================================
     # 유틸리티 메서드들

@@ -777,6 +777,7 @@ class TodoPanelApp:
 
         self._setup_window()
         self._setup_ui()
+        self._load_sort_settings()  # 정렬 설정 로드
         self._load_todos()
 
         # 창 닫기 이벤트 처리
@@ -962,7 +963,14 @@ class TodoPanelApp:
         self.sections_paned_window.add(completed_frame, minsize=40, sticky="nsew")
 
         # 기본 분할 비율 설정 (진행중 70%, 완료 30%)
-        self.root.after(100, self._set_initial_pane_ratio)
+        print("[DEBUG] 분할 비율 초기화 스케줄링...")
+        self.root.after(100, lambda: self._set_initial_pane_ratio())
+        # 대안: 즉시 호출도 추가
+        print("[DEBUG] 즉시 분할 비율 복원 시도...")
+        try:
+            self._set_initial_pane_ratio()
+        except Exception as e:
+            print(f"[DEBUG] 즉시 호출 실패: {e}")
 
     def _setup_scrollable_area(self, parent, section_type):
         """스크롤 가능한 영역 설정 (멀티 플랫폼 마우스 휠 지원)"""
@@ -1256,13 +1264,44 @@ class TodoPanelApp:
             return todo
 
     def _on_sort_changed(self, option_key: str):
-        """정렬 옵션 변경 시 처리"""
-        # 정렬 적용을 위해 TODO 목록 다시 로드
-        self._load_todos()
+        """정렬 옵션 변경 시 처리 - position 자동 동기화 포함"""
+        try:
+            # 먼저 현재 TODO 목록을 새로운 정렬 기준으로 가져오기
+            todos = self.todo_manager.get_todos()
+            pending_todos, completed_todos = self.sort_manager.separate_by_completion(todos)
 
-        # 드롭다운 디스플레이 업데이트
-        if hasattr(self, 'sort_dropdown') and self.sort_dropdown:
-            self.sort_dropdown.update_display()
+            # 🚀 NEW: 정렬 변경 후 position 자동 동기화
+            print(f"[DEBUG] 정렬 변경됨: {option_key} - position 동기화 시작")
+
+            # 미완료 항목들 position 동기화
+            if pending_todos:
+                sync_success = self.sort_manager.sync_positions_with_current_sort(
+                    pending_todos, self.todo_manager
+                )
+                print(f"[DEBUG] 미완료 항목 position 동기화: {'성공' if sync_success else '실패'}")
+
+            # 완료된 항목들 position 동기화
+            if completed_todos:
+                sync_success = self.sort_manager.sync_positions_with_current_sort(
+                    completed_todos, self.todo_manager
+                )
+                print(f"[DEBUG] 완료 항목 position 동기화: {'성공' if sync_success else '실패'}")
+
+            # 정렬 적용을 위해 TODO 목록 다시 로드
+            self._load_todos()
+
+            # 드롭다운 디스플레이 업데이트
+            if hasattr(self, 'sort_dropdown') and self.sort_dropdown:
+                self.sort_dropdown.update_display()
+
+            # 🆕 정렬 변경 시 즉시 설정 저장
+            self._save_all_ui_settings()
+            print(f"[DEBUG] 정렬 변경 후 즉시 저장 완료: {option_key}")
+
+        except Exception as e:
+            print(f"[ERROR] 정렬 변경 처리 실패: {e}")
+            # 폴백: 기본 로드만 수행
+            self._load_todos()
 
     def _load_todos(self):
         """TODO 목록 로드 및 표시 (섹션별 분리)"""
@@ -1404,18 +1443,23 @@ class TodoPanelApp:
             messagebox.showerror("오류", f"TODO 삭제 중 오류가 발생했습니다: {e}")
 
     def _reorder_todo(self, todo_id: str, move_steps: int):
-        """TODO 순서 변경 (수동 모드 자동 전환)"""
+        """TODO 순서 변경 (수동 모드 자동 전환) - 정리된 로직"""
         try:
-            # 현재 위치 찾기 (섹션 내에서)
+            # 현재 TODO 찾기
             widget = self.todo_widgets.get(todo_id)
             if not widget:
+                print(f"[WARNING] TODO 위젯을 찾을 수 없음: {todo_id}")
                 return
 
             is_completed = widget.todo_data.get('completed', False)
-            current_section_todos = [w.todo_data for w in
-                                   (self.completed_widgets.values() if is_completed
-                                    else self.pending_widgets.values())]
+            print(f"[DEBUG] TODO 이동 시작: {todo_id[:8]} ({'완료' if is_completed else '미완료'} 섹션)")
 
+            # 🔄 올바른 화면 순서 가져오기 (정렬된 순서)
+            todos = self.todo_manager.get_todos()
+            pending_todos, completed_todos = self.sort_manager.separate_by_completion(todos)
+            current_section_todos = completed_todos if is_completed else pending_todos
+
+            # 현재 위치 찾기
             current_pos = None
             for i, todo in enumerate(current_section_todos):
                 if todo['id'] == todo_id:
@@ -1423,24 +1467,43 @@ class TodoPanelApp:
                     break
 
             if current_pos is None:
+                print(f"[WARNING] TODO 위치를 찾을 수 없음: {todo_id}")
                 return
 
             # 새 위치 계산
             new_pos = max(0, min(len(current_section_todos) - 1, current_pos + move_steps))
+            print(f"[DEBUG] 위치 변경: {current_pos} -> {new_pos}")
 
             if new_pos != current_pos:
+                # 🚀 수동 이동 전 position 동기화 (MANUAL 모드가 아닌 경우에만)
+                if not self.sort_manager.is_manual_mode():
+                    print("[DEBUG] 수동 모드 전환 전 position 동기화 수행")
+                    sync_success = self.sort_manager.sync_positions_with_current_sort(
+                        current_section_todos, self.todo_manager
+                    )
+                    if not sync_success:
+                        print("[WARNING] Position 동기화 실패, 계속 진행합니다.")
+
+                # MANUAL 모드로 전환
+                self.sort_manager.set_manual_mode()
+
+                # 순서 변경
                 success = self.todo_manager.reorder_todos(todo_id, new_pos)
                 if success:
-                    # 수동 순서 변경 시 자동으로 MANUAL 모드로 전환
-                    self.sort_manager.set_manual_mode()
-
-                    # 드롭다운 디스플레이 업데이트
+                    print(f"[DEBUG] TODO 순서 변경 성공: {todo_id[:8]}")
+                    # UI 업데이트
                     if hasattr(self, 'sort_dropdown') and self.sort_dropdown:
                         self.sort_dropdown.update_display()
+                    self._load_todos()
 
-                    self._load_todos()  # 전체 리스트 다시 로드
+                    # 🆕 수동 모드 전환 및 순서 변경 후 즉시 설정 저장
+                    self._save_all_ui_settings()
+                    print("[DEBUG] 수동 모드 전환 후 즉시 저장 완료")
+                else:
+                    print(f"[ERROR] TODO 순서 변경 실패: {todo_id[:8]}")
 
         except Exception as e:
+            print(f"[ERROR] _reorder_todo 실패: {e}")
             messagebox.showerror("오류", f"TODO 순서 변경에 실패했습니다: {e}")
 
     def _clear_completed(self):
@@ -1574,51 +1637,15 @@ class TodoPanelApp:
             )
 
             # 분할바 호버 효과를 위한 바인딩
-            self.sections_paned_window.bind('<Enter>', self._on_sash_enter)
-            self.sections_paned_window.bind('<Leave>', self._on_sash_leave)
-            self.sections_paned_window.bind('<Button-1>', self._on_sash_click)
-            self.sections_paned_window.bind('<ButtonRelease-1>', self._on_sash_release)
+            self.sections_paned_window.bind('<Configure>', self._on_paned_window_configure)
 
         except Exception as e:
             if hasattr(self, '_debug') and self._debug:
                 print(f"[DEBUG] 분할바 스타일링 실패: {e}")
 
-    def _on_sash_enter(self, event):
-        """분할바 마우스 호버 시"""
-        try:
-            colors = DARK_COLORS
-            self.sections_paned_window.configure(bg=colors.get('accent', '#007acc'))
-        except:
-            pass
-
-    def _on_sash_leave(self, event):
-        """분할바 마우스 호버 해제 시"""
-        try:
-            colors = DARK_COLORS
-            self.sections_paned_window.configure(bg=colors['border'])
-        except:
-            pass
-
-    def _on_sash_click(self, event):
-        """분할바 클릭 시"""
-        try:
-            colors = DARK_COLORS
-            self.sections_paned_window.configure(bg=colors.get('accent_hover', '#005a9e'))
-        except:
-            pass
-
-    def _on_sash_release(self, event):
-        """분할바 클릭 해제 시"""
-        try:
-            colors = DARK_COLORS
-            self.sections_paned_window.configure(bg=colors['border'])
-            # 분할 비율 저장
-            self._save_pane_ratio()
-        except:
-            pass
-
     def _set_initial_pane_ratio(self):
         """초기 분할 비율 설정 (저장된 설정 또는 기본값 70%/30%)"""
+        print("[DEBUG] _set_initial_pane_ratio 함수 실행 시작")
         try:
             # 창 높이 계산
             total_height = self.sections_paned_window.winfo_height()
@@ -1640,6 +1667,70 @@ class TodoPanelApp:
                 print(f"[DEBUG] 초기 분할 비율 설정 실패: {e}")
             # 실패 시 나중에 다시 시도
             self.root.after(100, self._set_initial_pane_ratio)
+
+    def _save_all_ui_settings(self):
+        """모든 UI 설정을 통합 저장 (분할 비율 + 정렬 설정)"""
+        try:
+            import json
+            from datetime import datetime
+
+            # 공통 메서드로 설정 파일 경로 계산 (DRY 원칙)
+            config_file = self._get_config_file_path()
+            print(f"[DEBUG] UI 설정 파일 경로: {config_file}")
+
+            # 기존 설정 로드
+            settings = {}
+            if config_file.exists():
+                try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        settings = json.load(f)
+                except:
+                    settings = {}
+
+            # 1. 분할 비율 저장
+            total_height = self.sections_paned_window.winfo_height()
+            if total_height >= 50:  # 유효한 크기인 경우에만 저장
+                sash_coord = self.sections_paned_window.sash_coord(0)
+                pending_height = sash_coord[1] if sash_coord else total_height * 0.7
+                ratio = max(0.1, min(0.9, pending_height / total_height))
+                settings['paned_window_ratio'] = ratio
+                print(f"[DEBUG] 분할 비율 저장: {ratio:.2f}")
+
+            # 2. 정렬 설정 저장
+            if hasattr(self, 'sort_manager') and self.sort_manager:
+                sort_info_before = self.sort_manager.get_current_sort_info()
+                success = self.sort_manager.save_settings(settings)
+                if success:
+                    sort_settings = settings.get('sort_settings', {})
+                    print(f"[DEBUG] 정렬 설정 저장 성공: {sort_settings.get('sort_criteria', 'N/A')} {sort_settings.get('sort_direction', 'N/A')}")
+                else:
+                    print("[WARNING] 정렬 설정 저장 실패")
+            else:
+                print("[WARNING] SortManager를 찾을 수 없음")
+
+            # 3. 최종 저장 시간 업데이트
+            settings['last_updated'] = datetime.now().isoformat()
+
+            # 4. 설정 파일에 저장
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+
+            # 5. 저장 검증
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    saved_settings = json.load(f)
+                sort_verified = 'sort_settings' in saved_settings
+                print(f"[DEBUG] 설정 저장 검증: 파일크기={config_file.stat().st_size}B, 정렬설정={'포함' if sort_verified else '누락'}")
+            except Exception as verify_error:
+                print(f"[WARNING] 저장 검증 실패: {verify_error}")
+
+            print(f"[DEBUG] 모든 UI 설정 저장 완료: {config_file}")
+
+        except Exception as e:
+            print(f"[ERROR] UI 설정 저장 실패: {e}")
+            # 재시도 로직
+            import traceback
+            print(f"[ERROR] 스택 트레이스: {traceback.format_exc()}")
 
     def _save_pane_ratio(self):
         """현재 분할 비율을 사용자 설정에 저장"""
@@ -1691,34 +1782,110 @@ class TodoPanelApp:
             if hasattr(self, '_debug') and self._debug:
                 print(f"[DEBUG] 분할 비율 저장 실패: {e}")
 
+    def _load_sort_settings(self):
+        """저장된 정렬 설정을 불러와서 SortManager에 적용"""
+        try:
+            import json
+            import sys
+            from pathlib import Path
+            import os
+
+            # 설정 파일 경로 설정 (실행 파일과 같은 위치의 TodoPanel_Data 사용)
+            try:
+                # 실행 파일의 경로 가져오기 (PyInstaller 대응)
+                if getattr(sys, 'frozen', False):
+                    # PyInstaller로 빌드된 경우
+                    app_dir = Path(sys.executable).parent
+                else:
+                    # 개발 환경에서 실행하는 경우
+                    app_dir = Path(__file__).parent.parent.parent
+
+                config_file = app_dir / "TodoPanel_Data" / "ui_settings.json"
+                print(f"[DEBUG] UI 설정 파일 로드 경로: {config_file}")
+
+            except Exception as path_error:
+                # 폴백: 기존 방식 사용
+                print(f"[WARNING] 설정 경로 설정 실패, 기존 방식 사용: {path_error}")
+                config_file = Path(os.path.expanduser("~")) / "AppData" / "Local" / "TodoPanel" / "ui_settings.json"
+
+            if not config_file.exists():
+                print("[DEBUG] 설정 파일 없음, 기본 정렬 설정 사용")
+                return
+
+            with open(config_file, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+
+            # SortManager에 설정 로드
+            if hasattr(self, 'sort_manager') and self.sort_manager:
+                success = self.sort_manager.load_settings(settings)
+                if success:
+                    print("[DEBUG] 정렬 설정 로드 성공")
+
+                    # 정렬 드롭다운 UI 업데이트
+                    if hasattr(self, 'sort_dropdown') and self.sort_dropdown:
+                        self.sort_dropdown.update_display()
+                        print("[DEBUG] 정렬 드롭다운 UI 업데이트 완료")
+                else:
+                    print("[WARNING] 정렬 설정 로드 실패, 기본값 사용")
+
+        except Exception as e:
+            print(f"[ERROR] 정렬 설정 로드 중 오류: {e}")
+            # 오류 시 기본값 사용 (SortManager는 이미 기본값으로 초기화됨)
+
+    def _get_config_file_path(self):
+        """설정 파일 경로를 공통으로 계산 (DRY 원칙 적용)"""
+        try:
+            import sys
+            from pathlib import Path
+            import os
+
+            # 실행 파일의 경로 가져오기 (PyInstaller 대응)
+            if getattr(sys, 'frozen', False):
+                # PyInstaller로 빌드된 경우
+                app_dir = Path(sys.executable).parent
+            else:
+                # 개발 환경에서 실행하는 경우
+                app_dir = Path(__file__).parent.parent.parent
+
+            config_dir = app_dir / "TodoPanel_Data"
+            config_dir.mkdir(parents=True, exist_ok=True)
+
+            return config_dir / "ui_settings.json"
+
+        except Exception as path_error:
+            # 폴백: 기존 방식 사용
+            print(f"[WARNING] 설정 경로 설정 실패, 기존 방식 사용: {path_error}")
+            config_dir = Path(os.path.expanduser("~")) / "AppData" / "Local" / "TodoPanel"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            return config_dir / "ui_settings.json"
+
     def _load_pane_ratio(self):
         """저장된 분할 비율을 불러오기 (기본값: 0.7)"""
         try:
             import json
-            from pathlib import Path
-            import os
 
-            config_file = Path(os.path.expanduser("~")) / "AppData" / "Local" / "TodoPanel" / "ui_settings.json"
+            config_file = self._get_config_file_path()
+            print(f"[DEBUG] 설정 파일 경로: {config_file}")
 
             if not config_file.exists():
+                print(f"[DEBUG] 설정 파일 없음, 기본값 0.8 사용")
                 return 0.8  # 기본값
 
             with open(config_file, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
 
+            print(f"[DEBUG] 로드된 설정: {settings}")
             ratio = settings.get('paned_window_ratio', 0.8)
+            print(f"[DEBUG] 원본 비율값: {ratio}")
 
             # 유효한 범위인지 검증 (0.1 ~ 0.9)
             ratio = max(0.1, min(0.9, ratio))
-
-            if hasattr(self, '_debug') and self._debug:
-                print(f"[DEBUG] 분할 비율 로드됨: {ratio:.2f}")
+            print(f"[DEBUG] 검증된 비율값: {ratio}")
 
             return ratio
 
         except Exception as e:
-            if hasattr(self, '_debug') and self._debug:
-                print(f"[DEBUG] 분할 비율 로드 실패, 기본값 사용: {e}")
+            print(f"[DEBUG] 분할 비율 로드 실패, 기본값 사용: {e}")
             return 0.8  # 기본값
 
     def _update_status(self):
@@ -1733,14 +1900,24 @@ class TodoPanelApp:
     def _on_closing(self):
         """앱 종료 시"""
         try:
+            # 1. 모든 UI 설정 저장 (분할 비율 + 정렬 설정)
+            print("[DEBUG] 애플리케이션 종료: UI 설정 저장 중...")
+            self._save_all_ui_settings()
+
+            # 2. TODO 데이터 저장
             # AsyncTodoManager의 경우 shutdown 메소드 호출
             if hasattr(self.todo_manager, 'shutdown'):
+                print("[DEBUG] AsyncTodoManager shutdown 호출")
                 self.todo_manager.shutdown()
             # 기본 TodoManager의 경우 save_data 호출
             elif hasattr(self.todo_manager, 'save_data'):
+                print("[DEBUG] TodoManager save_data 호출")
                 self.todo_manager.save_data()
+
+            print("[DEBUG] 애플리케이션 정상 종료")
+
         except Exception as e:
-            print(f"종료 중 오류: {e}")
+            print(f"[ERROR] 종료 중 오류: {e}")
         finally:
             self.root.destroy()
 
@@ -1756,3 +1933,21 @@ class TodoPanelApp:
 
         # 메인 루프 시작
         self.root.mainloop()
+
+    # 올바른 PanedWindow 이벤트 처리
+    def _on_paned_window_configure(self, event):
+        """PanedWindow 구조 변경 시 - 디바운싱으로 설정 저장"""
+        # 기존 타이머가 있으면 취소
+        if hasattr(self, '_save_timer'):
+            self.root.after_cancel(self._save_timer)
+
+        # 1초 후 설정 저장 (디바운싱)
+        self._save_timer = self.root.after(1000, self._save_ui_settings_debounced)
+
+    def _save_ui_settings_debounced(self):
+        """디바운싱된 UI 설정 저장"""
+        try:
+            self._save_all_ui_settings()
+            print("[DEBUG] 분할바 조절 후 설정 저장 완료")
+        except Exception as e:
+            print(f"[ERROR] 분할바 설정 저장 실패: {e}")

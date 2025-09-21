@@ -97,31 +97,47 @@ class SortDropdownWidget:
         self.dropdown_window.focus_set()
 
     def _position_dropdown(self):
-        """드롭다운 위치 계산 및 설정"""
-        # 메인 버튼의 위치와 크기 가져오기
-        button_x = self.main_button.winfo_rootx()
-        button_y = self.main_button.winfo_rooty()
-        button_height = self.main_button.winfo_height()
+        """드롭다운 위치 계산 및 설정 (멀티모니터 대응)"""
+        try:
+            # 부모 윈도우의 위치 정보 가져오기
+            self.parent.update_idletasks()  # 위치 정보 업데이트 보장
 
-        # 드롭다운을 버튼 바로 아래에 위치
-        dropdown_x = button_x
-        dropdown_y = button_y + button_height + 2
+            # 메인 버튼의 절대 위치 계산
+            button_x = self.main_button.winfo_rootx()
+            button_y = self.main_button.winfo_rooty()
+            button_width = self.main_button.winfo_width()
+            button_height = self.main_button.winfo_height()
 
-        # 화면 경계 확인 및 조정
-        screen_width = self.parent.winfo_screenwidth()
-        screen_height = self.parent.winfo_screenheight()
+            print(f"[DEBUG] 버튼 위치: ({button_x}, {button_y}) 크기: {button_width}x{button_height}")
 
-        # 예상 드롭다운 크기 (4개 옵션 * 30px + 여백)
-        estimated_width = 200
-        estimated_height = 4 * 30 + 10
+            # 드롭다운 기본 위치 (버튼 바로 아래)
+            dropdown_x = button_x
+            dropdown_y = button_y + button_height + 2
 
-        # 화면 경계를 벗어나지 않도록 조정
-        if dropdown_x + estimated_width > screen_width:
-            dropdown_x = screen_width - estimated_width - 10
-        if dropdown_y + estimated_height > screen_height:
-            dropdown_y = button_y - estimated_height - 2
+            # 드롭다운 예상 크기 (단순화)
+            estimated_width = 200
+            estimated_height = min(len(self.sort_manager.get_sort_options()) * 32 + 20, 150)
 
-        self.dropdown_window.geometry(f"+{dropdown_x}+{dropdown_y}")
+            # 현재 화면 영역 가져오기 (멀티모니터 대응)
+            # 간단한 방법: 버튼이 위치한 화면의 경계 추정
+            screen_width = self.parent.winfo_screenwidth()
+            screen_height = self.parent.winfo_screenheight()
+
+            # 화면 경계 검사 및 조정 (단순화)
+            if dropdown_x + estimated_width > screen_width:
+                dropdown_x = max(0, button_x + button_width - estimated_width)
+
+            if dropdown_y + estimated_height > screen_height:
+                dropdown_y = max(0, button_y - estimated_height - 2)
+
+            print(f"[DEBUG] 드롭다운 위치: ({dropdown_x}, {dropdown_y}) 크기: {estimated_width}x{estimated_height}")
+
+            self.dropdown_window.geometry(f"{estimated_width}x{estimated_height}+{dropdown_x}+{dropdown_y}")
+
+        except Exception as e:
+            print(f"[ERROR] 드롭다운 위치 계산 실패: {e}")
+            # 폴백: 기본 위치
+            self.dropdown_window.geometry(f"+{self.main_button.winfo_rootx()}+{self.main_button.winfo_rooty() + 30}")
 
     def _create_menu_options(self):
         """드롭다운 메뉴 옵션들 생성"""

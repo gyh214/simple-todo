@@ -60,6 +60,7 @@ a = Analysis(
         'ui.widgets',
         'ui.date_utils',
         'ui.sort_manager',
+        'ui.sort_dropdown_widget',  # 새로 추가된 드롭다운 컴포넌트
         'ui.main_app',
         # 추가 UI 관련 모듈들
         'ui_components',

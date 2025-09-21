@@ -155,3 +155,143 @@ class SortManager:
     def is_manual_mode(self) -> bool:
         """현재 수동 정렬 모드인지 확인"""
         return self.current_criteria == SortCriteria.MANUAL
+
+    def sync_positions_with_current_sort(self, todos: List[Dict[str, Any]], todo_manager) -> bool:
+        """
+        현재 정렬 순서에 맞게 position 값을 동기화 (DRY+CLEAN+Simple)
+
+        Args:
+            todos: 현재 정렬된 TODO 목록
+            todo_manager: position 업데이트를 위한 매니저
+
+        Returns:
+            동기화 성공 여부
+        """
+        try:
+            if not todos:
+                print("[DEBUG] Position 동기화: 빈 목록, 성공 반환")
+                return True
+
+            print(f"[DEBUG] Position 동기화 시작: {len(todos)}개 항목")
+
+            # 현재 정렬 순서대로 position 재할당
+            updated_count = 0
+            for new_position, todo in enumerate(todos):
+                current_position = todo.get('position', 0)
+                if current_position != new_position:
+                    todo['position'] = new_position
+                    updated_count += 1
+                    print(f"[DEBUG] Position 업데이트: {todo['id'][:8]} {current_position} -> {new_position}")
+
+            if updated_count == 0:
+                print("[DEBUG] Position 동기화: 변경사항 없음")
+                return True
+
+            # TodoManager에 position 동기화 요청
+            if hasattr(todo_manager, 'sync_positions_with_order'):
+                success = todo_manager.sync_positions_with_order(todos)
+                print(f"[DEBUG] Position 동기화 완료: {updated_count}개 업데이트, 성공={success}")
+                return success
+            else:
+                print("[WARNING] TodoManager에 sync_positions_with_order 메서드 없음")
+                return False
+
+        except Exception as e:
+            print(f"[ERROR] Position 동기화 실패: {e}")
+            return False
+
+    def get_settings_dict(self) -> Dict[str, Any]:
+        """
+        현재 정렬 설정을 딕셔너리로 반환
+
+        Returns:
+            정렬 설정 딕셔너리
+        """
+        try:
+            return {
+                'sort_criteria': self.current_criteria.value,
+                'sort_direction': self.current_direction.value,
+                'current_option_index': self._current_option_index
+            }
+        except Exception as e:
+            print(f"[ERROR] 정렬 설정 추출 실패: {e}")
+            return {}
+
+    def save_settings(self, settings_dict: Dict[str, Any]) -> bool:
+        """
+        현재 정렬 상태를 설정 딕셔너리에 저장
+
+        Args:
+            settings_dict: 전체 설정 딕셔너리 (수정됨)
+
+        Returns:
+            저장 성공 여부
+        """
+        try:
+            # 정렬 설정 섹션 생성
+            sort_settings = self.get_settings_dict()
+            settings_dict['sort_settings'] = sort_settings
+
+            print(f"[DEBUG] 정렬 설정 저장: {sort_settings}")
+            return True
+
+        except Exception as e:
+            print(f"[ERROR] 정렬 설정 저장 실패: {e}")
+            return False
+
+    def load_settings(self, settings_dict: Dict[str, Any]) -> bool:
+        """
+        설정 딕셔너리에서 정렬 상태 복원
+
+        Args:
+            settings_dict: 전체 설정 딕셔너리
+
+        Returns:
+            로드 성공 여부
+        """
+        try:
+            sort_settings = settings_dict.get('sort_settings', {})
+            if not sort_settings:
+                print("[DEBUG] 저장된 정렬 설정 없음, 기본값 사용")
+                return True
+
+            # 정렬 기준 복원
+            criteria_value = sort_settings.get('sort_criteria')
+            if criteria_value:
+                try:
+                    self.current_criteria = SortCriteria(criteria_value)
+                except ValueError:
+                    print(f"[WARNING] 잘못된 정렬 기준: {criteria_value}, 기본값 사용")
+                    self.current_criteria = SortCriteria.DUE_DATE
+
+            # 정렬 방향 복원
+            direction_value = sort_settings.get('sort_direction')
+            if direction_value:
+                try:
+                    self.current_direction = SortDirection(direction_value)
+                except ValueError:
+                    print(f"[WARNING] 잘못된 정렬 방향: {direction_value}, 기본값 사용")
+                    self.current_direction = SortDirection.ASCENDING
+
+            # 옵션 인덱스 복원
+            option_index = sort_settings.get('current_option_index')
+            if option_index is not None and 0 <= option_index < len(self._sort_options):
+                self._current_option_index = option_index
+            else:
+                # 현재 criteria와 direction에 맞는 인덱스 찾기
+                for i, option in enumerate(self._sort_options):
+                    if (option['criteria'] == self.current_criteria and
+                        option['direction'] == self.current_direction):
+                        self._current_option_index = i
+                        break
+
+            print(f"[DEBUG] 정렬 설정 로드 완료: {self.current_criteria.value} {self.current_direction.value}")
+            return True
+
+        except Exception as e:
+            print(f"[ERROR] 정렬 설정 로드 실패: {e}")
+            # 실패 시 기본값으로 복원
+            self.current_criteria = SortCriteria.DUE_DATE
+            self.current_direction = SortDirection.ASCENDING
+            self._current_option_index = 0
+            return False

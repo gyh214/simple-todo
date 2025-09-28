@@ -42,6 +42,7 @@ a = Analysis(
     
     # 숨겨진 imports (자동 감지되지 않는 모듈들)
     hiddenimports=[
+        # 외부 라이브러리들
         'pystray',
         'PIL',
         'PIL.Image',
@@ -55,34 +56,62 @@ a = Analysis(
         'logging',
         'threading',
         'datetime',
-        # UI 패키지 및 모듈들 (모든 새로운 기능 포함)
-        'ui',
-        'ui.widgets',
-        'ui.date_utils',
-        'ui.sort_manager',
-        'ui.sort_dropdown_widget',  # 새로 추가된 드롭다운 컴포넌트
-        'ui.main_app',
-        # 추가 UI 관련 모듈들
-        'ui_components',
+        # Core 모듈들
+        'main',
         'todo_manager',
-        # 새로 추가된 아키텍처 모듈들
+        'ui_components',
+        'tooltip',
+        'run_todo_panel',
         'interfaces',
         'di_container',
         'app_bootstrap',
         'data_preservation_service',
-        # 서비스 패키지
+        # UI 패키지 및 모듈들 (새로운 Manager 아키텍처)
+        'ui',
+        'ui.__init__',
+        'ui.date_utils',
+        'ui.main_app',
+        'ui.sort_dropdown_widget',
+        'ui.sort_manager',
+        'ui.widgets',
+        # UI 컴포넌트 패키지
+        'ui.components',
+        'ui.components.__init__',
+        'ui.components.collapsible_section',
+        # UI 다이얼로그 패키지
+        'ui.dialogs',
+        'ui.dialogs.__init__',
+        'ui.dialogs.date_picker_dialog',
+        # UI 인터페이스 패키지
+        'ui.interfaces',
+        'ui.interfaces.__init__',
+        'ui.interfaces.manager_interfaces',
+        # UI 매니저 패키지 (새로운 Manager 패턴)
+        'ui.managers',
+        'ui.managers.control_panel_manager',
+        'ui.managers.event_handler',
+        'ui.managers.settings_manager',
+        'ui.managers.todo_display_manager',
+        'ui.managers.ui_layout_manager',
+        # UI 유틸리티 패키지
+        'ui.utils',
+        'ui.utils.__init__',
+        'ui.utils.constants',
+        'ui.utils.error_handling',
+        'ui.utils.logging_config',
+        'ui.utils.ui_helpers',
+        # 서비스 패키지 (CLEAN 아키텍처)
         'services',
+        'services.__init__',
         'services.todo_app_service',
         'services.validation_service',
         'services.notification_service',
         'services.notification_service_simple',
-        # 인프라스트럭처 패키지
+        # 인프라스트럭처 패키지 (CLEAN 아키텍처)
         'infrastructure',
+        'infrastructure.__init__',
         'infrastructure.system_service',
-        'infrastructure.file_service',
-        # 유틸리티 모듈들
-        'tooltip',
-        'run_todo_panel'
+        'infrastructure.file_service'
     ],
     
     # 훅 디렉토리 
@@ -94,7 +123,7 @@ a = Analysis(
     # 런타임 옵션
     runtime_tmpdir=None,
     
-    # 제외할 모듈들 (필요시)
+    # 제외할 모듈들 (테스트 파일들과 레거시 백업 파일들)
     excludes=[
         'test_todo_manager',
         'test_main',
@@ -102,7 +131,17 @@ a = Analysis(
         'test_integration',
         'test_data_preservation',
         'test_unified_manager',
-        'todo_manager_legacy_backup'
+        'todo_manager_legacy_backup',
+        'test_collapsible_section',
+        'test_date_picker_dialog',
+        'test_date_picker_integration',
+        'test_date_picker_real_integration',
+        'performance_test',
+        'performance_profiler',
+        'memory_leak_detector',
+        'stability_test',
+        'measure_refactoring_impact',
+        'generate_docs'
     ],
     
     # Win32 특정 옵션

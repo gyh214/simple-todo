@@ -4,7 +4,8 @@ DRY+CLEAN+Simple 원칙 적용
 """
 
 import tkinter as tk
-from typing import Dict, Any, List, Callable, Optional
+from typing import Any, Callable, Dict, List, Optional
+
 from .widgets import DARK_COLORS, get_button_style
 
 
@@ -34,20 +35,20 @@ class SortDropdownWidget:
         # 메인 버튼 스타일
         self.main_button = tk.Button(
             self.parent,
-            font=('Segoe UI', 9),
-            bg=colors['button_bg'],
-            fg=colors['text'],
-            relief='flat',
+            font=("Segoe UI", 9),
+            bg=colors["button_bg"],
+            fg=colors["text"],
+            relief="flat",
             borderwidth=1,
             padx=8,
             pady=5,
-            cursor='hand2',
-            command=self._toggle_dropdown
+            cursor="hand2",
+            command=self._toggle_dropdown,
         )
 
         # 호버 효과
-        self.main_button.bind('<Enter>', self._on_button_enter)
-        self.main_button.bind('<Leave>', self._on_button_leave)
+        self.main_button.bind("<Enter>", self._on_button_enter)
+        self.main_button.bind("<Leave>", self._on_button_leave)
 
     def _update_main_button(self):
         """현재 정렬 상태에 따라 메인 버튼 텍스트 업데이트"""
@@ -58,12 +59,12 @@ class SortDropdownWidget:
     def _on_button_enter(self, event):
         """버튼 호버 시 스타일 변경"""
         colors = DARK_COLORS
-        self.main_button.configure(bg=colors['bg_hover'])
+        self.main_button.configure(bg=colors["bg_hover"])
 
     def _on_button_leave(self, event):
         """버튼 호버 해제 시 스타일 복원"""
         colors = DARK_COLORS
-        self.main_button.configure(bg=colors['button_bg'])
+        self.main_button.configure(bg=colors["button_bg"])
 
     def _toggle_dropdown(self):
         """드롭다운 메뉴 토글"""
@@ -83,8 +84,8 @@ class SortDropdownWidget:
         # 드롭다운 윈도우 생성
         self.dropdown_window = tk.Toplevel(self.parent)
         self.dropdown_window.wm_overrideredirect(True)  # 타이틀바 제거
-        self.dropdown_window.configure(bg=colors['bg_secondary'])
-        self.dropdown_window.wm_attributes('-topmost', True)
+        self.dropdown_window.configure(bg=colors["bg_secondary"])
+        self.dropdown_window.wm_attributes("-topmost", True)
 
         # 위치 계산
         self._position_dropdown()
@@ -93,7 +94,7 @@ class SortDropdownWidget:
         self._create_menu_options()
 
         # 외부 클릭 감지
-        self.dropdown_window.bind('<FocusOut>', self._on_focus_out)
+        self.dropdown_window.bind("<FocusOut>", self._on_focus_out)
         self.dropdown_window.focus_set()
 
     def _position_dropdown(self):
@@ -108,7 +109,9 @@ class SortDropdownWidget:
             button_width = self.main_button.winfo_width()
             button_height = self.main_button.winfo_height()
 
-            print(f"[DEBUG] 버튼 위치: ({button_x}, {button_y}) 크기: {button_width}x{button_height}")
+            print(
+                f"[DEBUG] 버튼 위치: ({button_x}, {button_y}) 크기: {button_width}x{button_height}"
+            )
 
             # 드롭다운 기본 위치 (버튼 바로 아래)
             dropdown_x = button_x
@@ -130,14 +133,20 @@ class SortDropdownWidget:
             if dropdown_y + estimated_height > screen_height:
                 dropdown_y = max(0, button_y - estimated_height - 2)
 
-            print(f"[DEBUG] 드롭다운 위치: ({dropdown_x}, {dropdown_y}) 크기: {estimated_width}x{estimated_height}")
+            print(
+                f"[DEBUG] 드롭다운 위치: ({dropdown_x}, {dropdown_y}) 크기: {estimated_width}x{estimated_height}"
+            )
 
-            self.dropdown_window.geometry(f"{estimated_width}x{estimated_height}+{dropdown_x}+{dropdown_y}")
+            self.dropdown_window.geometry(
+                f"{estimated_width}x{estimated_height}+{dropdown_x}+{dropdown_y}"
+            )
 
         except Exception as e:
             print(f"[ERROR] 드롭다운 위치 계산 실패: {e}")
             # 폴백: 기본 위치
-            self.dropdown_window.geometry(f"+{self.main_button.winfo_rootx()}+{self.main_button.winfo_rooty() + 30}")
+            self.dropdown_window.geometry(
+                f"+{self.main_button.winfo_rootx()}+{self.main_button.winfo_rooty() + 30}"
+            )
 
     def _create_menu_options(self):
         """드롭다운 메뉴 옵션들 생성"""
@@ -146,10 +155,7 @@ class SortDropdownWidget:
 
         # 메뉴 프레임
         menu_frame = tk.Frame(
-            self.dropdown_window,
-            bg=colors['bg_secondary'],
-            relief='solid',
-            borderwidth=1
+            self.dropdown_window, bg=colors["bg_secondary"], relief="solid", borderwidth=1
         )
         menu_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
@@ -158,8 +164,8 @@ class SortDropdownWidget:
 
         for i, option in enumerate(options):
             is_current = (
-                option['criteria'] == current_sort_info['criteria'] and
-                option['direction'] == current_sort_info['direction']
+                option["criteria"] == current_sort_info["criteria"]
+                and option["direction"] == current_sort_info["direction"]
             )
 
             self._create_option_button(menu_frame, option, is_current, i)
@@ -178,32 +184,34 @@ class SortDropdownWidget:
 
         # 버튼 색상 설정
         if is_current:
-            bg_color = colors['accent']
-            fg_color = 'white'
+            bg_color = colors["accent"]
+            fg_color = "white"
         else:
-            bg_color = colors['bg_secondary']
-            fg_color = colors['text']
+            bg_color = colors["bg_secondary"]
+            fg_color = colors["text"]
 
         option_button = tk.Button(
             parent,
             text=button_text,
-            font=('Segoe UI', 9),
+            font=("Segoe UI", 9),
             bg=bg_color,
             fg=fg_color,
-            relief='flat',
+            relief="flat",
             borderwidth=0,
             padx=12,
             pady=6,
-            anchor='w',
-            cursor='hand2',
-            command=lambda key=option['key']: self._on_option_selected(key)
+            anchor="w",
+            cursor="hand2",
+            command=lambda key=option["key"]: self._on_option_selected(key),
         )
         option_button.pack(fill=tk.X, pady=1)
 
         # 호버 효과 (현재 선택되지 않은 항목만)
         if not is_current:
-            option_button.bind('<Enter>', lambda e, btn=option_button: btn.configure(bg=colors['bg_hover']))
-            option_button.bind('<Leave>', lambda e, btn=option_button: btn.configure(bg=bg_color))
+            option_button.bind(
+                "<Enter>", lambda e, btn=option_button: btn.configure(bg=colors["bg_hover"])
+            )
+            option_button.bind("<Leave>", lambda e, btn=option_button: btn.configure(bg=bg_color))
 
     def _create_manual_option(self, parent, index: int):
         """수동 순서 옵션 생성"""
@@ -214,16 +222,16 @@ class SortDropdownWidget:
         manual_button = tk.Button(
             parent,
             text=button_text,
-            font=('Segoe UI', 9),
-            bg=colors['accent'],
-            fg='white',
-            relief='flat',
+            font=("Segoe UI", 9),
+            bg=colors["accent"],
+            fg="white",
+            relief="flat",
             borderwidth=0,
             padx=12,
             pady=6,
-            anchor='w',
-            cursor='hand2',
-            state='disabled'  # 현재 상태이므로 비활성화
+            anchor="w",
+            cursor="hand2",
+            state="disabled",  # 현재 상태이므로 비활성화
         )
         manual_button.pack(fill=tk.X, pady=1)
 
@@ -259,6 +267,7 @@ class SortDropdownWidget:
 
     def _bind_global_events(self):
         """전역 이벤트 바인딩 (외부 클릭 감지)"""
+
         def on_global_click(event):
             if self.is_open and self.dropdown_window:
                 # 클릭한 위젯이 드롭다운 내부가 아닌 경우 닫기
@@ -271,7 +280,7 @@ class SortDropdownWidget:
         while root.master:
             root = root.master
 
-        root.bind('<Button-1>', on_global_click, add='+')
+        root.bind("<Button-1>", on_global_click, add="+")
 
     def _is_child_of(self, widget, parent):
         """위젯이 부모의 자식인지 확인"""
@@ -296,7 +305,7 @@ class SortDropdownWidget:
     def destroy(self):
         """위젯 정리"""
         self._close_dropdown()
-        if hasattr(self, 'main_button'):
+        if hasattr(self, "main_button"):
             self.main_button.destroy()
 
     def update_display(self):

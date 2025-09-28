@@ -2,9 +2,9 @@
 날짜 처리 및 만료 확인 유틸리티 모듈
 """
 
-from datetime import datetime, date
-from typing import Optional, Union
 import re
+from datetime import date, datetime
+from typing import Optional, Union
 
 
 class DateUtils:
@@ -40,21 +40,21 @@ class DateUtils:
         try:
             # ISO 날짜 형식들 시도
             date_patterns = [
-                r'^\d{4}-\d{2}-\d{2}$',  # YYYY-MM-DD
-                r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}',  # ISO datetime
+                r"^\d{4}-\d{2}-\d{2}$",  # YYYY-MM-DD
+                r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}",  # ISO datetime
             ]
 
             for pattern in date_patterns:
                 if re.match(pattern, date_str):
-                    if 'T' in date_str:
+                    if "T" in date_str:
                         # datetime 형식
-                        return datetime.fromisoformat(date_str.split('T')[0]).date()
+                        return datetime.fromisoformat(date_str.split("T")[0]).date()
                     else:
                         # date 형식
                         return datetime.fromisoformat(date_str).date()
 
             # 다른 형식들도 시도
-            return datetime.strptime(date_str[:10], '%Y-%m-%d').date()
+            return datetime.strptime(date_str[:10], "%Y-%m-%d").date()
 
         except (ValueError, TypeError):
             return None
@@ -211,13 +211,13 @@ class DateUtils:
         """
         if not due_date:
             return {
-                'has_due_date': False,
-                'is_expired': False,
-                'is_today': False,
-                'is_upcoming': False,
-                'days_until_due': None,
-                'display_text': "",
-                'status_color': 'normal'
+                "has_due_date": False,
+                "is_expired": False,
+                "is_today": False,
+                "is_upcoming": False,
+                "days_until_due": None,
+                "display_text": "",
+                "status_color": "normal",
             }
 
         days_until = DateUtils.get_days_until_due(due_date)
@@ -227,20 +227,20 @@ class DateUtils:
 
         # 상태에 따른 색상 결정
         if is_expired:
-            status_color = 'expired'  # 빨간색
+            status_color = "expired"  # 빨간색
         elif is_today:
-            status_color = 'today'    # 주황색
+            status_color = "today"  # 주황색
         elif is_upcoming:
-            status_color = 'upcoming' # 노란색
+            status_color = "upcoming"  # 노란색
         else:
-            status_color = 'normal'   # 기본색
+            status_color = "normal"  # 기본색
 
         return {
-            'has_due_date': True,
-            'is_expired': is_expired,
-            'is_today': is_today,
-            'is_upcoming': is_upcoming,
-            'days_until_due': days_until,
-            'display_text': DateUtils.format_date_for_display(due_date),
-            'status_color': status_color
+            "has_due_date": True,
+            "is_expired": is_expired,
+            "is_today": is_today,
+            "is_upcoming": is_upcoming,
+            "days_until_due": days_until,
+            "display_text": DateUtils.format_date_for_display(due_date),
+            "status_color": status_color,
         }

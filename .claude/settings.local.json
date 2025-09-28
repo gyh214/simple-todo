@@ -17,7 +17,10 @@
       "mcp__context7__get-library-docs",
       "mcp__magicui__getComponents",
       "mcp__magicui__getTextAnimations",
-      "Read(//c/Users/gyh21/AppData/Local/TodoPanel/**)"
+      "Read(//c/Users/gyh21/AppData/Local/TodoPanel/**)",
+      "Bash(find:*)",
+      "Read(//c/Users/gyh21/.claude/**)",
+      "Read(//d/test_todoPanel/TodoPanel_Data/**)"
     ],
     "deny": [],
     "ask": []

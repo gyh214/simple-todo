@@ -14,9 +14,9 @@ from ui.widgets import (
 )
 from ui.main_app import (
     TodoPanelApp,
-    DatePickerDialog,
     CollapsibleSection
 )
+from ui.dialogs.date_picker_dialog import DatePickerDialog
 from ui.sort_manager import SortManager
 from ui.date_utils import DateUtils
 

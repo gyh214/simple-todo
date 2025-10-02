@@ -177,7 +177,7 @@ class DataPreservationService(IDataPreservationService):
             # 4. 업데이트 요청에서 명시된 필드들 적용
             update_applied_fields = []
             for field, value in updates.items():
-                if field in self._preserved_field_definitions or field in ['text', 'completed']:
+                if field in self._preserved_field_definitions or field in ['content', 'completed']:
                     # 허용된 필드만 업데이트
                     preserved_data[field] = value
                     update_applied_fields.append(field)
@@ -258,7 +258,7 @@ class DataPreservationService(IDataPreservationService):
             preserved_data: 보존 처리된 데이터 (수정됨)
             original_backup: 원본 데이터 백업
         """
-        required_fields = ['id', 'text', 'completed', 'created_at']
+        required_fields = ['id', 'content', 'completed', 'created_at']
 
         for field in required_fields:
             if field not in preserved_data or preserved_data[field] is None:
@@ -354,13 +354,13 @@ class DataPreservationService(IDataPreservationService):
                     message=f"납기일 형식이 올바르지 않습니다: {due_date}"
                 )
 
-        # text 검증 (빈 텍스트 방지)
-        if 'text' in updates:
-            text = updates['text']
+        # content 검증 (빈 텍스트 방지)
+        if 'content' in updates:
+            text = updates['content']
             if not isinstance(text, str) or not text.strip():
                 raise DataPreservationError(
-                    field='text',
-                    current_value=todo_data.get('text'),
+                    field='content',
+                    current_value=todo_data.get('content'),
                     attempted_value=text,
                     message="TODO 텍스트는 비어있을 수 없습니다"
                 )
@@ -395,7 +395,7 @@ class DataPreservationService(IDataPreservationService):
                 preserved[field_name] = todo_data[field_name]
 
         # 기본 필드들도 포함
-        for basic_field in ['text', 'completed']:
+        for basic_field in ['content', 'completed']:
             if basic_field in todo_data:
                 preserved[basic_field] = todo_data[basic_field]
 

@@ -103,7 +103,7 @@ class TodoAppService(ITodoService):
                 raise TodoRepositoryError("Invalid due date format", "VALIDATION_ERROR")
 
             # 3. 전체 데이터 검증
-            todo_data = {'text': text, **kwargs}
+            todo_data = {'content': text, **kwargs}
             validation_errors = self._validation_service.validate_todo_data(todo_data)
             if validation_errors:
                 error_message = "\\n".join(validation_errors)
@@ -154,8 +154,8 @@ class TodoAppService(ITodoService):
                 return False
 
             # 2. 업데이트 데이터 검증
-            if 'text' in kwargs:
-                if not self._validation_service.validate_todo_text(kwargs['text']):
+            if 'content' in kwargs:
+                if not self._validation_service.validate_todo_text(kwargs['content']):
                     self._notification_service.show_error("유효하지 않은 TODO 텍스트입니다.")
                     return False
 
@@ -211,7 +211,7 @@ class TodoAppService(ITodoService):
                 return False
 
             # 2. 사용자 확인
-            todo_text = existing_todo.get('text', '알 수 없는 TODO')[:50]
+            todo_text = existing_todo.get('content', '알 수 없는 TODO')[:50]
             if not self._notification_service.ask_confirmation(
                 f"다음 TODO를 삭제하시겠습니까?\\n\\n'{todo_text}'"):
                 return False

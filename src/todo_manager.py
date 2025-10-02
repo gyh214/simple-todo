@@ -433,7 +433,7 @@ class UnifiedTodoManager(ITodoRepository):
         # 새로운 TODO 항목 생성
         todo = {
             'id': self._generate_id(),
-            'text': text.strip(),
+            'content': text.strip(),
             'completed': False,
             'created_at': datetime.now().isoformat(),
             'due_date': kwargs.get('due_date'),
@@ -519,7 +519,7 @@ class UnifiedTodoManager(ITodoRepository):
     def _apply_preserved_update(self, todo: Dict[str, Any], preserved_data: Dict[str, Any]) -> None:
         """보존된 데이터를 TODO 항목에 적용"""
         for field, value in preserved_data.items():
-            if field == 'text' and value is not None:
+            if field == 'content' and value is not None:
                 todo[field] = value.strip()
             else:
                 todo[field] = value
@@ -537,7 +537,7 @@ class UnifiedTodoManager(ITodoRepository):
                     self._request_save()
 
                     if self._debug:
-                        logger.info(f"🗑️ TODO 삭제: {todo_id[:8]}... - {deleted_todo.get('text', '')[:30]}...")
+                        logger.info(f"🗑️ TODO 삭제: {todo_id[:8]}... - {deleted_todo.get('content', '')[:30]}...")
 
                     return True
         return False
@@ -630,7 +630,7 @@ class UnifiedTodoManager(ITodoRepository):
             raise TodoRepositoryError("todos는 리스트여야 합니다", 'INVALID_DATA_TYPE')
 
         # 데이터 유효성 검증
-        required_fields = ['id', 'text', 'completed', 'created_at']
+        required_fields = ['id', 'content', 'completed', 'created_at']
         for todo in todos:
             if not isinstance(todo, dict):
                 raise TodoRepositoryError("각 TODO 항목은 딕셔너리여야 합니다", 'INVALID_TODO_FORMAT')
@@ -865,14 +865,14 @@ def main():
         for todo in all_todos:
             status = "✅" if todo['completed'] else "📋"
             due = f" (📅 {todo.get('due_date', 'N/A')})" if todo.get('due_date') else ""
-            print(f"  {status} {todo['text'][:40]}...{due}")
+            print(f"  {status} {todo['content'][:40]}...{due}")
 
         # 3. 납기일 보존 업데이트 테스트 (핵심 테스트!)
         print("\n3. [핵심] 납기일 보존 업데이트 테스트")
         print(f"업데이트 전 납기일: {todo1.get('due_date')}")
 
         # 텍스트만 변경 (납기일은 자동 보존되어야 함)
-        success = manager.update_todo(todo1['id'], text="수정된 첫 번째 TODO 항목")
+        success = manager.update_todo(todo1['id'], content="수정된 첫 번째 TODO 항목")
 
         updated_todo = manager.get_todo_by_id(todo1['id'])
         print(f"업데이트 후 납기일: {updated_todo.get('due_date')}")
@@ -911,7 +911,7 @@ def main():
             status = "✅" if todo['completed'] else "📋"
             due = f" 📅{todo.get('due_date')}" if todo.get('due_date') else ""
             priority = f" ⚡{todo.get('priority')}" if todo.get('priority') else ""
-            print(f"  {i+1}. {status} {todo['text'][:30]}...{due}{priority}")
+            print(f"  {i+1}. {status} {todo['content'][:30]}...{due}{priority}")
 
         # 정리
         time.sleep(2)  # 비동기 저장 완료 대기

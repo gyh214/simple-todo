@@ -20,7 +20,12 @@
       "Read(//c/Users/gyh21/AppData/Local/TodoPanel/**)",
       "Bash(find:*)",
       "Read(//c/Users/gyh21/.claude/**)",
-      "Read(//d/test_todoPanel/TodoPanel_Data/**)"
+      "Read(//d/test_todoPanel/TodoPanel_Data/**)",
+      "Bash(taskkill:*)",
+      "Bash(findstr:*)",
+      "Read(//d/**)",
+      "Bash(tasklist)",
+      "Bash(git tag:*)"
     ],
     "deny": [],
     "ask": []

@@ -205,7 +205,7 @@ class ValidationService(IValidationService):
             return errors
 
         # 1. 필수 필드 검증
-        text = todo_data.get('text', '')
+        text = todo_data.get('content', '')
         if not self.validate_todo_text(text):
             errors.append("유효하지 않은 TODO 텍스트입니다.")
 

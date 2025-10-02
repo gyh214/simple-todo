@@ -58,14 +58,16 @@ class DatePickerDialog:
         self.edit_mode = edit_mode
         self.updated_text = todo_text  # 편집된 텍스트 저장
 
+        # DRY 원칙: 색상을 인스턴스 변수로 정의
+        self.colors = DARK_COLORS
+
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("할일 수정" if edit_mode else "할일 추가")
         self.dialog.transient(parent)
         self.dialog.grab_set()
 
         # 다크 테마 색상 적용
-        colors = DARK_COLORS
-        self.dialog.configure(bg=colors["bg"])
+        self.dialog.configure(bg=self.colors["bg"])
 
         # 모든 UI 섹션 구성
         self._setup_ui_sections()
@@ -200,19 +202,17 @@ class DatePickerDialog:
         모든 UI 요소들의 부모가 되는 메인 프레임을 생성합니다.
         새 섹션을 추가할 때는 반드시 self.main_frame을 부모로 사용하세요.
         """
-        colors = DARK_COLORS
-        self.main_frame = tk.Frame(self.dialog, bg=colors["bg"])
+        self.main_frame = tk.Frame(self.dialog, bg=self.colors["bg"])
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
     def _setup_header(self):
         """제목 섹션 구성"""
-        colors = DARK_COLORS
         title_label = tk.Label(
             self.main_frame,
             text="📝 할일 추가",
             font=("Segoe UI", 14, "bold"),
-            bg=colors["bg"],
-            fg=colors["text"],
+            bg=self.colors["bg"],
+            fg=self.colors["text"],
         )
         title_label.pack(pady=(0, 10))
 
@@ -225,7 +225,7 @@ class DatePickerDialog:
                 # 임시 TODO 데이터 생성 (표시용)
                 temp_todo = {
                     "id": "preview",
-                    "text": self.todo_text,
+                    "content": self.todo_text,
                     "completed": False,
                     "created_at": datetime.now().isoformat(),
                     "due_date": None,  # 아직 설정되지 않음
@@ -236,17 +236,14 @@ class DatePickerDialog:
                     self.main_frame, todo_data=temp_todo, read_only=True  # 읽기전용 모드
                 )
                 display_frame.pack(fill=tk.X, pady=(0, 15))
-
-                # 미리보기 표시를 위한 스타일 적용
-                display_frame.configure(relief="solid", borderwidth=1)
             else:
                 # StandardTodoDisplay가 없는 경우 기본 라벨로 대체
                 preview_label = tk.Label(
                     self.main_frame,
                     text=f"📝 {self.todo_text}",
                     font=("Segoe UI", 10),
-                    bg=DARK_COLORS["bg_secondary"],
-                    fg=DARK_COLORS["text"],
+                    bg=self.colors["bg_secondary"],
+                    fg=self.colors["text"],
                     anchor="w",
                     justify="left",
                     relief="solid",
@@ -258,15 +255,13 @@ class DatePickerDialog:
 
     def _setup_text_input(self):
         """편집 모드에서 할일 텍스트 입력 섹션 구성"""
-        colors = DARK_COLORS
-
         # 할일 텍스트 입력 섹션 라벨
         text_label = tk.Label(
             self.main_frame,
             text="📝 할일 내용",
             font=("Segoe UI", 12, "bold"),
-            bg=colors["bg"],
-            fg=colors["text"],
+            bg=self.colors["bg"],
+            fg=self.colors["text"],
         )
         text_label.pack(pady=(0, 10))
 
@@ -274,11 +269,11 @@ class DatePickerDialog:
         self.text_entry = tk.Entry(
             self.main_frame,
             font=("Segoe UI", 10),
-            bg=colors["entry_bg"],
-            fg=colors["text"],
+            bg=self.colors["entry_bg"],
+            fg=self.colors["text"],
             borderwidth=1,
             relief="solid",
-            insertbackground=colors["text"],
+            insertbackground=self.colors["text"],
         )
         self.text_entry.pack(fill=tk.X, pady=(0, 15), padx=10)
 
@@ -301,20 +296,18 @@ class DatePickerDialog:
 
     def _setup_calendar_section(self):
         """캘린더 섹션 구성"""
-        colors = DARK_COLORS
-
         # 납기일 선택 섹션 라벨
         date_label = tk.Label(
             self.main_frame,
             text="📅 납기일 선택",
             font=("Segoe UI", 12, "bold"),
-            bg=colors["bg"],
-            fg=colors["text"],
+            bg=self.colors["bg"],
+            fg=self.colors["text"],
         )
         date_label.pack(pady=(0, 10))
 
         # 캘린더 프레임
-        self.calendar_frame = tk.Frame(self.main_frame, bg=colors["bg"])
+        self.calendar_frame = tk.Frame(self.main_frame, bg=self.colors["bg"])
         self.calendar_frame.pack(pady=(0, 20))
 
     def _setup_buttons(self):
@@ -334,10 +327,8 @@ class DatePickerDialog:
         preview_btn = tk.Button(button_frame, text="미리보기", ...)
         preview_btn.pack(side=tk.LEFT, padx=(10, 0))
         """
-        colors = DARK_COLORS
-
         # 버튼 프레임
-        button_frame = tk.Frame(self.main_frame, bg=colors["bg"])
+        button_frame = tk.Frame(self.main_frame, bg=self.colors["bg"])
         button_frame.pack(fill=tk.X, pady=(10, 0))
 
         # 버튼들 (편집 모드에 따라 텍스트 변경)
@@ -370,8 +361,6 @@ class DatePickerDialog:
 
     def _setup_calendar(self):
         """간단한 캘린더 UI 구성"""
-        colors = DARK_COLORS
-
         # 현재 날짜 또는 초기 날짜 설정
         if self.selected_date:
             # 초기 날짜가 있으면 해당 년월로 설정
@@ -391,7 +380,7 @@ class DatePickerDialog:
             self.current_year = today.year
 
         # 월/년 선택 프레임
-        month_year_frame = tk.Frame(self.calendar_frame, bg=colors["bg"])
+        month_year_frame = tk.Frame(self.calendar_frame, bg=self.colors["bg"])
         month_year_frame.pack(pady=(0, 10))
 
         # 이전 달 버튼
@@ -399,8 +388,8 @@ class DatePickerDialog:
             month_year_frame,
             text="<",
             font=("Segoe UI", 10),
-            bg=colors["button_bg"],
-            fg=colors["text"],
+            bg=self.colors["button_bg"],
+            fg=self.colors["text"],
             command=self._prev_month,
             width=3,
         )
@@ -411,8 +400,8 @@ class DatePickerDialog:
             month_year_frame,
             text=f"{self.current_year}년 {self.current_month}월",
             font=("Segoe UI", 11, "bold"),
-            bg=colors["bg"],
-            fg=colors["text"],
+            bg=self.colors["bg"],
+            fg=self.colors["text"],
         )
         self.month_year_label.pack(side=tk.LEFT, padx=10)
 
@@ -421,15 +410,15 @@ class DatePickerDialog:
             month_year_frame,
             text=">",
             font=("Segoe UI", 10),
-            bg=colors["button_bg"],
-            fg=colors["text"],
+            bg=self.colors["button_bg"],
+            fg=self.colors["text"],
             command=self._next_month,
             width=3,
         )
         next_btn.pack(side=tk.LEFT, padx=(10, 0))
 
         # 요일 헤더
-        days_frame = tk.Frame(self.calendar_frame, bg=colors["bg"])
+        days_frame = tk.Frame(self.calendar_frame, bg=self.colors["bg"])
         days_frame.pack()
 
         day_names = ["일", "월", "화", "수", "목", "금", "토"]
@@ -438,15 +427,15 @@ class DatePickerDialog:
                 days_frame,
                 text=day_name,
                 font=("Segoe UI", 9, "bold"),
-                bg=colors["bg"],
-                fg=colors["text_secondary"],
+                bg=self.colors["bg"],
+                fg=self.colors["text_secondary"],
                 width=4,
                 height=1,
             )
             day_label.grid(row=0, column=day_names.index(day_name), padx=1, pady=1)
 
         # 날짜 버튼들을 위한 프레임
-        self.dates_frame = tk.Frame(self.calendar_frame, bg=colors["bg"])
+        self.dates_frame = tk.Frame(self.calendar_frame, bg=self.colors["bg"])
         self.dates_frame.pack(pady=(5, 0))
 
         self._update_calendar()
@@ -471,8 +460,6 @@ class DatePickerDialog:
 
     def _update_calendar(self):
         """캘린더 업데이트"""
-        colors = DARK_COLORS
-
         # 월/년 라벨 업데이트
         self.month_year_label.configure(text=f"{self.current_year}년 {self.current_month}월")
 
@@ -522,20 +509,20 @@ class DatePickerDialog:
 
             # 버튼 색상 설정
             if is_past:
-                bg_color = colors["bg_secondary"]
-                fg_color = colors["text_secondary"]
+                bg_color = self.colors["bg_secondary"]
+                fg_color = self.colors["text_secondary"]
                 state = "normal"  # 과거 날짜도 활성화
             elif is_selected:  # 기존 선택된 날짜
-                bg_color = colors["accent"]
+                bg_color = self.colors["accent"]
                 fg_color = "white"
                 state = "normal"
             elif is_today:
-                bg_color = colors["warning"]
-                fg_color = colors["bg"]
+                bg_color = self.colors["warning"]
+                fg_color = self.colors["bg"]
                 state = "normal"
             else:
-                bg_color = colors["button_bg"]
-                fg_color = colors["text"]
+                bg_color = self.colors["button_bg"]
+                fg_color = self.colors["text"]
                 state = "normal"
 
             date_btn = tk.Button(
@@ -551,7 +538,7 @@ class DatePickerDialog:
             )
 
             # 모든 날짜에 호버 효과 적용
-            date_btn.bind("<Enter>", lambda e, btn=date_btn: btn.configure(bg=colors["bg_hover"]))
+            date_btn.bind("<Enter>", lambda e, btn=date_btn: btn.configure(bg=self.colors["bg_hover"]))
             date_btn.bind(
                 "<Leave>", lambda e, btn=date_btn, orig_bg=bg_color: btn.configure(bg=orig_bg)
             )

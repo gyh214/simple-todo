@@ -606,7 +606,7 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
 
         # 클릭 가능한 텍스트 위젯 (URL 링크 지원)
         self.text_widget = ClickableTextWidget(
-            text_frame, self.todo_data["text"], font_info=("Segoe UI", 9), debug=self._debug
+            text_frame, self.todo_data["content"], font_info=("Segoe UI", 9), debug=self._debug
         )
         self.text_widget.pack(side=tk.TOP, fill=tk.X, expand=True)
 
@@ -813,9 +813,9 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
         """할일 더블클릭시 편집 다이얼로그 표시"""
         try:
             # DatePickerDialog import
-            from ..dialogs.date_picker_dialog import DatePickerDialog
+            from .dialogs.date_picker_dialog import DatePickerDialog
 
-            current_text = self.todo_data["text"]
+            current_text = self.todo_data["content"]
             current_date = self.todo_data.get("due_date")
 
             # DatePickerDialog 편집 모드로 호출
@@ -830,7 +830,7 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
 
                 # 텍스트 변경 시
                 if updated_text and updated_text != current_text:
-                    update_kwargs["text"] = updated_text
+                    update_kwargs["content"] = updated_text
 
                 # 납기일 설정
                 if result == "with_date":
@@ -883,7 +883,7 @@ class TodoItemWidget(tk.Frame, DragDropMixin):
     def update_data(self, todo_data: Dict[str, Any]):
         """TODO 데이터 업데이트"""
         self.todo_data = todo_data
-        self.text_widget.update_text(todo_data["text"])
+        self.text_widget.update_text(todo_data["content"])
         self.check_var.set(todo_data["completed"])
         self._update_completion_style()
         self._update_due_date_display()  # 납기일 표시도 업데이트
@@ -982,7 +982,7 @@ class StandardTodoDisplay(tk.Frame):
         # 클릭 가능한 텍스트 위젯 (URL 링크 지원)
         self.text_widget = ClickableTextWidget(
             self.text_container,
-            self.todo_data.get("text", ""),
+            self.todo_data.get("content", ""),
             font_info=("Segoe UI", font_size),
             debug=False,
         )
@@ -1119,7 +1119,7 @@ class StandardTodoDisplay(tk.Frame):
 
         # 텍스트 업데이트
         if hasattr(self, "text_widget"):
-            self.text_widget.update_text(todo_data.get("text", ""))
+            self.text_widget.update_text(todo_data.get("content", ""))
 
         # 납기일 업데이트 - 기존 납기일 컨테이너 제거
         if hasattr(self, "due_date_container"):
@@ -1133,7 +1133,7 @@ class StandardTodoDisplay(tk.Frame):
 
     def get_text(self) -> str:
         """현재 표시된 텍스트 반환"""
-        return self.todo_data.get("text", "")
+        return self.todo_data.get("content", "")
 
     def set_completion_style(self, completed: bool):
         """완료 상태에 따른 스타일 적용"""

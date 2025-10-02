@@ -310,10 +310,27 @@ class UnifiedTodoManager(ITodoRepository):
                     raise TodoRepositoryError(f"데이터 로드 실패: {e}", 'LOAD_FAILED')
 
     def _migrate_legacy_data(self) -> None:
-        """기존 데이터를 새로운 스키마로 마이그레이션"""
+        """
+        기존 데이터를 새로운 스키마로 마이그레이션
+
+        🔄 마이그레이션 항목:
+        =====================
+        1. text → content 필드 변환 (레거시 호환성)
+        2. position 필드 추가 (드래그앤드롭 지원)
+        3. created_at 필드 추가 (메타데이터)
+        4. due_date 필드 추가 (납기일 기능)
+        """
         migrated_count = 0
 
         for i, todo in enumerate(self._todos):
+            # 🔄 LEGACY: text → content 필드 마이그레이션
+            if 'text' in todo and 'content' not in todo:
+                todo['content'] = todo['text']
+                del todo['text']  # 중복 방지를 위해 기존 text 필드 제거
+                migrated_count += 1
+                if self._debug:
+                    logger.info(f"  ✓ text → content 변환: {todo['id'][:8]}...")
+
             # position 필드 추가
             if 'position' not in todo:
                 todo['position'] = i
@@ -331,7 +348,7 @@ class UnifiedTodoManager(ITodoRepository):
                 migrated_count += 1
 
         if migrated_count > 0:
-            logger.info(f"🔄 데이터 마이그레이션 완료: {migrated_count}개 필드 추가")
+            logger.info(f"🔄 데이터 마이그레이션 완료: {migrated_count}개 필드 추가/변환")
             self._request_save()
 
     def _try_restore_from_backup(self) -> bool:
@@ -625,19 +642,33 @@ class UnifiedTodoManager(ITodoRepository):
         return self.get_todos()
 
     def import_data(self, todos: List[Dict[str, Any]], merge: bool = False) -> int:
-        """외부 데이터를 가져오기"""
+        """
+        외부 데이터를 가져오기
+
+        🔄 레거시 호환성:
+        ==================
+        - text 또는 content 필드 모두 허용
+        - 자동으로 text → content 변환 수행
+        """
         if not isinstance(todos, list):
             raise TodoRepositoryError("todos는 리스트여야 합니다", 'INVALID_DATA_TYPE')
 
         # 데이터 유효성 검증
-        required_fields = ['id', 'content', 'completed', 'created_at']
         for todo in todos:
             if not isinstance(todo, dict):
                 raise TodoRepositoryError("각 TODO 항목은 딕셔너리여야 합니다", 'INVALID_TODO_FORMAT')
 
-            for field in required_fields:
-                if field not in todo:
-                    raise TodoRepositoryError(f"필수 필드가 누락되었습니다: {field}", 'MISSING_REQUIRED_FIELD')
+            # 필수 필드 검증 (text 또는 content 중 하나는 있어야 함)
+            if 'id' not in todo:
+                raise TodoRepositoryError("필수 필드가 누락되었습니다: id", 'MISSING_REQUIRED_FIELD')
+            if 'completed' not in todo:
+                raise TodoRepositoryError("필수 필드가 누락되었습니다: completed", 'MISSING_REQUIRED_FIELD')
+            if 'created_at' not in todo:
+                raise TodoRepositoryError("필수 필드가 누락되었습니다: created_at", 'MISSING_REQUIRED_FIELD')
+
+            # text 또는 content 필드 검증 (레거시 호환성)
+            if 'content' not in todo and 'text' not in todo:
+                raise TodoRepositoryError("필수 필드가 누락되었습니다: content 또는 text", 'MISSING_REQUIRED_FIELD')
 
         with self._lock:
             if not merge:
@@ -661,7 +692,9 @@ class UnifiedTodoManager(ITodoRepository):
 
             # position 재인덱싱
             self._reindex_positions()
-            self._request_save()
+
+            # 레거시 데이터 마이그레이션 (text → content 등)
+            self._migrate_legacy_data()
 
             if self._debug:
                 logger.info(f"📥 데이터 가져오기 완료: {imported_count}개 항목")

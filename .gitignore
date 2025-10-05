@@ -41,6 +41,3 @@ nul
 # OS
 .DS_Store
 Thumbs.db
-
-# PyInstaller
-*.spec

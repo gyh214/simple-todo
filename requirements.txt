@@ -1,0 +1,13 @@
+# Simple ToDo Application Requirements
+
+# GUI Framework
+PyQt6>=6.6.0
+
+# Date/Time Utilities
+python-dateutil>=2.8.2
+
+# Build Tools
+PyInstaller>=6.0.0
+
+# System Utilities
+psutil>=5.9.0

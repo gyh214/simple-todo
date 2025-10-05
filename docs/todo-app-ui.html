@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple ToDo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #0D0D0D;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 420px;
+            background: #1A1A1A;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #2D2D2D 0%, #1A1A1A 100%);
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(64, 64, 64, 0.3);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .header h1 {
+            color: rgba(255, 255, 255, 0.92);
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* Input Section */
+        .input-section {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            background: #2A2A2A;
+            border: 1px solid rgba(64, 64, 64, 0.3);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: rgba(255, 255, 255, 0.92);
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #CC785C;
+            box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.1);
+        }
+
+        input[type="text"]::placeholder {
+            color: rgba(107, 107, 107, 0.5);
+        }
+
+        .btn {
+            background: #CC785C;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #FFFFFF;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background: #E08B6F;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(204, 120, 92, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-icon {
+            background: #363636;
+            color: #B0B0B0;
+            padding: 12px;
+            min-width: auto;
+        }
+
+        .btn-icon:hover {
+            background: #404040;
+            color: rgba(255, 255, 255, 0.92);
+            transform: translateY(-1px);
+        }
+
+        .sort-select {
+            background: #2A2A2A;
+            border: 1px solid rgba(64, 64, 64, 0.3);
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: #B0B0B0;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sort-select:hover {
+            border-color: #CC785C;
+        }
+
+        .sort-select:focus {
+            outline: none;
+            border-color: #CC785C;
+        }
+
+        /* Content */
+        .content {
+            padding: 16px 20px;
+            height: 520px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Section Container */
+        .section-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* Section */
+        .section {
+            display: flex;
+            flex-direction: column;
+            min-height: 100px;
+            overflow: hidden;
+        }
+
+        .section.in-progress {
+            flex: 1;
+        }
+
+        .section.completed {
+            flex: 1;
+        }
+
+        .section-items {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .section-items::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .section-items::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .section-items::-webkit-scrollbar-thumb {
+            background: rgba(64, 64, 64, 0.5);
+            border-radius: 3px;
+        }
+
+        .section-items::-webkit-scrollbar-thumb:hover {
+            background: rgba(64, 64, 64, 0.7);
+        }
+
+        /* Divider */
+        .divider {
+            height: 8px;
+            background: transparent;
+            cursor: ns-resize;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 6px 0;
+            user-select: none;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(64, 64, 64, 0.3);
+            transition: background 0.2s;
+        }
+
+        .divider::after {
+            content: '⋯';
+            font-size: 16px;
+            color: rgba(64, 64, 64, 0.5);
+            background: #1A1A1A;
+            padding: 0 12px;
+            position: relative;
+            z-index: 1;
+            transition: color 0.2s;
+        }
+
+        .divider:hover::before {
+            background: #CC785C;
+            height: 3px;
+        }
+
+        .divider:hover::after {
+            color: #CC785C;
+        }
+
+        .divider.dragging::before {
+            background: #CC785C;
+            height: 3px;
+        }
+
+        .divider.dragging::after {
+            color: #CC785C;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(64, 64, 64, 0.3);
+        }
+
+        .section-title {
+            color: rgba(255, 255, 255, 0.92);
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .section-count {
+            background: #363636;
+            color: #B0B0B0;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        /* Todo Item */
+        .todo-item {
+            background: #2A2A2A;
+            border: 1px solid rgba(64, 64, 64, 0.3);
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .todo-item:hover {
+            background: #2D2D2D;
+            border-color: rgba(204, 120, 92, 0.3);
+        }
+
+        .todo-item.completed {
+            opacity: 0.6;
+        }
+
+        .todo-item.completed .todo-text {
+            text-decoration: line-through;
+            color: #6B6B6B;
+        }
+
+        .drag-handle {
+            color: #6B6B6B;
+            cursor: grab;
+            font-size: 14px;
+            line-height: 1;
+            padding-top: 2px;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .checkbox {
+            position: relative;
+            width: 18px;
+            height: 18px;
+            min-width: 18px;
+            border: 2px solid rgba(64, 64, 64, 0.5);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 1px;
+        }
+
+        .checkbox:hover {
+            border-color: #CC785C;
+        }
+
+        .checkbox.checked {
+            background: #CC785C;
+            border-color: #CC785C;
+        }
+
+        .checkbox.checked::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .todo-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .todo-text {
+            color: rgba(255, 255, 255, 0.92);
+            font-size: 13px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            margin-bottom: 4px;
+        }
+
+        .todo-link {
+            color: #CC785C;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .todo-link:hover {
+            color: #E08B6F;
+        }
+
+        .todo-path {
+            color: #CC785C;
+            text-decoration: underline;
+            cursor: pointer;
+            opacity: 0.8;
+        }
+
+        .todo-path:hover {
+            opacity: 1;
+        }
+
+        .todo-meta {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .todo-date {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .todo-date.overdue {
+            background: rgba(204, 120, 92, 0.2);
+            color: #CC785C;
+            opacity: 0.7;
+        }
+
+        .todo-date.today {
+            background: rgba(204, 120, 92, 0.2);
+            color: #CC785C;
+        }
+
+        .todo-date.upcoming {
+            background: rgba(204, 120, 92, 0.15);
+            color: #CC785C;
+            opacity: 0.8;
+        }
+
+        .todo-date.normal {
+            background: rgba(64, 64, 64, 0.3);
+            color: #B0B0B0;
+        }
+
+        .todo-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .todo-item:hover .todo-actions {
+            opacity: 1;
+        }
+
+        .btn-action {
+            background: transparent;
+            border: none;
+            color: #6B6B6B;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-action:hover {
+            background: rgba(244, 67, 54, 0.15);
+            color: #ef5350;
+        }
+
+        /* Footer */
+        .footer {
+            background: #2A2A2A;
+            border-top: 1px solid rgba(64, 64, 64, 0.3);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status {
+            color: #B0B0B0;
+            font-size: 11px;
+        }
+
+        .status-highlight {
+            color: #CC785C;
+            font-weight: 600;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6B6B6B;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+        }
+
+        /* Calendar Dialog (Simplified for demo) */
+        .calendar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .calendar-dialog {
+            background: #2A2A2A;
+            border-radius: 12px;
+            padding: 20px;
+            width: 90%;
+            max-width: 320px;
+            border: 1px solid rgba(64, 64, 64, 0.3);
+        }
+
+        .calendar-header {
+            color: rgba(255, 255, 255, 0.92);
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .calendar-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .calendar-actions .btn {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-top">
+                <h1>Simple ToDo</h1>
+                <select class="sort-select">
+                    <option>정렬: 납기일 빠른순</option>
+                    <option>정렬: 납기일 늦은순</option>
+                </select>
+            </div>
+            
+            <!-- Input Section -->
+            <div class="input-section">
+                <div class="input-wrapper">
+                    <input type="text" id="todoInput" placeholder="새 할 일을 입력하세요...">
+                </div>
+                <button class="btn" id="addBtn">추가</button>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- In Progress Section -->
+            <div class="section in-progress">
+                <div class="section-header">
+                    <div class="section-title">
+                        진행중
+                        <span class="section-count">5</span>
+                    </div>
+                </div>
+
+                <div class="section-items">
+                    <!-- Todo Items -->
+                    <div class="todo-item">
+                        <div class="drag-handle">☰</div>
+                        <div class="checkbox"></div>
+                        <div class="todo-content">
+                            <div class="todo-text">
+                                프로젝트 기획서 작성하기
+                            </div>
+                            <div class="todo-meta">
+                                <span class="todo-date overdue">2일 지남</span>
+                            </div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-action">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="todo-item">
+                        <div class="drag-handle">☰</div>
+                        <div class="checkbox"></div>
+                        <div class="todo-content">
+                            <div class="todo-text">
+                                <span class="todo-link">https://claude.ai</span> 방문해서 새 기능 확인
+                            </div>
+                            <div class="todo-meta">
+                                <span class="todo-date today">오늘</span>
+                            </div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-action">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="todo-item">
+                        <div class="drag-handle">☰</div>
+                        <div class="checkbox"></div>
+                        <div class="todo-content">
+                            <div class="todo-text">
+                                디자인 파일 정리 <span class="todo-path">C:\Projects\Design</span> 폴더에서
+                            </div>
+                            <div class="todo-meta">
+                                <span class="todo-date upcoming">3일 남음</span>
+                            </div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-action">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="todo-item">
+                        <div class="drag-handle">☰</div>
+                        <div class="checkbox"></div>
+                        <div class="todo-content">
+                            <div class="todo-text">
+                                주간 팀 미팅 자료 준비
+                            </div>
+                            <div class="todo-meta">
+                                <span class="todo-date normal">5일 남음</span>
+                            </div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-action">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="todo-item">
+                        <div class="drag-handle">☰</div>
+                        <div class="checkbox"></div>
+                        <div class="todo-content">
+                            <div class="todo-text">
+                                코드 리뷰 요청사항 반영하기
+                            </div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-action">✕</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resizable Divider -->
+            <div class="divider" id="divider"></div>
+
+            <!-- Completed Section -->
+            <div class="section completed">
+                <div class="section-header">
+                    <div class="section-title">
+                        완료
+                        <span class="section-count">3</span>
+                    </div>
+                </div>
+
+                <div class="section-items">
+                    <div class="todo-item completed">
+                        <div class="drag-handle">☰</div>
+                        <div class="checkbox checked"></div>
+                        <div class="todo-content">
+                            <div class="todo-text">
+                                TODO 앱 UI 디자인 완료
+                            </div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-action">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="todo-item completed">
+                        <div class="drag-handle">☰</div>
+                        <div class="checkbox checked"></div>
+                        <div class="todo-content">
+                            <div class="todo-text">
+                                다크 모드 색상 테마 적용
+                            </div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-action">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="todo-item completed">
+                        <div class="drag-handle">☰</div>
+                        <div class="checkbox checked"></div>
+                        <div class="todo-content">
+                            <div class="todo-text">
+                                반응형 레이아웃 구현
+                            </div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-action">✕</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="status">
+                진행중: <span class="status-highlight">5개</span> | 
+                완료: <span class="status-highlight">3개</span> | 
+                전체: <span class="status-highlight">8개</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Divider resize functionality
+        const divider = document.getElementById('divider');
+        const content = document.querySelector('.content');
+        const inProgressSection = document.querySelector('.section.in-progress');
+        const completedSection = document.querySelector('.section.completed');
+        
+        let isDragging = false;
+        let startY = 0;
+        let startInProgressFlex = 1;
+        let startCompletedFlex = 1;
+
+        divider.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            startY = e.clientY;
+            divider.classList.add('dragging');
+            
+            // Get current flex values
+            const inProgressHeight = inProgressSection.offsetHeight;
+            const completedHeight = completedSection.offsetHeight;
+            const totalHeight = inProgressHeight + completedHeight;
+            
+            startInProgressFlex = inProgressHeight / totalHeight;
+            startCompletedFlex = completedHeight / totalHeight;
+            
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+            
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            
+            const deltaY = e.clientY - startY;
+            const contentHeight = content.offsetHeight;
+            const deltaFlex = deltaY / contentHeight;
+            
+            let newInProgressFlex = startInProgressFlex + deltaFlex;
+            let newCompletedFlex = startCompletedFlex - deltaFlex;
+            
+            // Minimum flex values (10% of total)
+            const minFlex = 0.1;
+            if (newInProgressFlex < minFlex) {
+                newInProgressFlex = minFlex;
+                newCompletedFlex = 1 - minFlex;
+            }
+            if (newCompletedFlex < minFlex) {
+                newCompletedFlex = minFlex;
+                newInProgressFlex = 1 - minFlex;
+            }
+            
+            inProgressSection.style.flex = newInProgressFlex;
+            completedSection.style.flex = newCompletedFlex;
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (isDragging) {
+                isDragging = false;
+                divider.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+
+        // Simple interactive demo
+        document.querySelectorAll('.checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', function(e) {
+                e.stopPropagation();
+                
+                const todoItem = this.closest('.todo-item');
+                const section = this.closest('.section');
+                const isInProgress = section.classList.contains('in-progress');
+                
+                // Toggle checked state
+                this.classList.toggle('checked');
+                todoItem.classList.toggle('completed');
+                
+                // Move item to appropriate section
+                if (isInProgress && this.classList.contains('checked')) {
+                    // Move to completed section
+                    const completedItems = document.querySelector('.section.completed .section-items');
+                    completedItems.appendChild(todoItem);
+                } else if (!isInProgress && !this.classList.contains('checked')) {
+                    // Move back to in-progress section
+                    const inProgressItems = document.querySelector('.section.in-progress .section-items');
+                    inProgressItems.appendChild(todoItem);
+                }
+                
+                // Update counts
+                updateCounts();
+            });
+        });
+
+        function updateCounts() {
+            const inProgressCount = document.querySelectorAll('.section.in-progress .todo-item').length;
+            const completedCount = document.querySelectorAll('.section.completed .todo-item').length;
+            const totalCount = inProgressCount + completedCount;
+            
+            document.querySelector('.section.in-progress .section-count').textContent = inProgressCount;
+            document.querySelector('.section.completed .section-count').textContent = completedCount;
+            
+            const statusText = `진행중: <span class="status-highlight">${inProgressCount}개</span> | 완료: <span class="status-highlight">${completedCount}개</span> | 전체: <span class="status-highlight">${totalCount}개</span>`;
+            document.querySelector('.status').innerHTML = statusText;
+        }
+
+        document.querySelectorAll('.todo-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.stopPropagation();
+                alert('브라우저에서 ' + this.textContent + ' 열기');
+            });
+        });
+
+        document.querySelectorAll('.todo-path').forEach(path => {
+            path.addEventListener('click', function(e) {
+                e.stopPropagation();
+                alert('탐색기에서 ' + this.textContent + ' 열기');
+            });
+        });
+
+        document.querySelectorAll('.btn-action').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if(confirm('이 할 일을 삭제하시겠습니까?')) {
+                    this.closest('.todo-item').remove();
+                }
+            });
+        });
+
+        document.getElementById('addBtn').addEventListener('click', function() {
+            const input = document.getElementById('todoInput');
+            if(input.value.trim()) {
+                alert('새 할 일 추가: ' + input.value);
+                input.value = '';
+            }
+        });
+
+        document.getElementById('todoInput').addEventListener('keypress', function(e) {
+            if(e.key === 'Enter') {
+                document.getElementById('addBtn').click();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__sequential-thinking__sequentialthinking_tools",
+      "Read(//d/dev_proj/todo-panel/**)",
+      "Bash(sed:*)",
+      "Bash(tree:*)",
+      "Read(//d/**)",
+      "mcp__magicui__getButtons",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,61 @@
+# UTF-8
+#
+# Windows 실행 파일에 대한 버전 정보
+# PyInstaller에서 --version-file 옵션으로 사용됩니다.
+#
+
+VSVersionInfo(
+    ffi=FixedFileInfo(
+        # filevers 및 prodvers는 버전을 나타내는 튜플이어야 합니다
+        # (1, 0, 0, 0) = "1.0.0.0"
+        filevers=(1, 0, 0, 0),
+        prodvers=(1, 0, 0, 0),
+        # mask는 유효한 버전 정보를 포함하는 filevers 구성 요소를 나타냅니다
+        mask=0x3f,
+        # flags는 이 버전의 파일에 적용되는 boolean 속성의 비트 조합입니다
+        flags=0x0,
+        # OS: 이 파일이 설계된 운영 체제
+        OS=0x40004,
+        # fileType: 파일의 일반적인 유형
+        fileType=0x1,
+        # subtype: 파일의 함수
+        subtype=0x0,
+        # date
+        date=(0, 0)
+    ),
+    kids=[
+        StringFileInfo(
+            [
+                StringTable(
+                    u'042004B0',
+                    [
+                        StringStruct(u'CompanyName', u'Simple ToDo Development'),
+                        StringStruct(u'FileDescription', u'Simple ToDo - Minimal Desktop Task Manager'),
+                        StringStruct(u'FileVersion', u'1.0.0.0'),
+                        StringStruct(u'InternalName', u'SimpleTodo'),
+                        StringStruct(u'LegalCopyright', u'Copyright (c) 2025 Simple ToDo Development. All rights reserved.'),
+                        StringStruct(u'OriginalFilename', u'SimpleTodo.exe'),
+                        StringStruct(u'ProductName', u'Simple ToDo'),
+                        StringStruct(u'ProductVersion', u'1.0.0.0'),
+                        StringStruct(u'Comments', u'Simple and minimal desktop task manager application'),
+                    ]
+                ),
+                StringTable(
+                    u'040904B0',
+                    [
+                        StringStruct(u'CompanyName', u'Simple ToDo Development'),
+                        StringStruct(u'FileDescription', u'Simple ToDo - Minimal Desktop Task Manager'),
+                        StringStruct(u'FileVersion', u'1.0.0.0'),
+                        StringStruct(u'InternalName', u'SimpleTodo'),
+                        StringStruct(u'LegalCopyright', u'Copyright (c) 2025 Simple ToDo Development. All rights reserved.'),
+                        StringStruct(u'OriginalFilename', u'SimpleTodo.exe'),
+                        StringStruct(u'ProductName', u'Simple ToDo'),
+                        StringStruct(u'ProductVersion', u'1.0.0.0'),
+                        StringStruct(u'Comments', u'Simple and minimal desktop task manager application'),
+                    ]
+                )
+            ]
+        ),
+        VarFileInfo([VarStruct(u'Translation', [0x420, 1200, 0x409, 1200])])
+    ]
+)

@@ -46,7 +46,7 @@ class BuildManager:
         self.build_dir = self.root_dir / 'build'
         self.main_script = self.root_dir / 'main.py'
         self.spec_file = self.root_dir / 'simple_todo.spec'
-        self.icon_file = self.root_dir / 'SimpleTodo.ico'
+        self.icon_file = self.root_dir / 'simple-todo.ico'
         self.version_file = self.root_dir / 'version_info.txt'
         self.output_exe = self.dist_dir / 'SimpleTodo.exe'
 
@@ -212,6 +212,27 @@ class BuildManager:
         self.log(f"파일 크기: {size_mb:.1f} MB ({file_size:,} bytes)")
 
         return True
+
+    def copy_icon_to_dist(self) -> bool:
+        """아이콘 파일을 dist 폴더로 복사 (런타임 사용)"""
+        self.log("아이콘 파일 복사 중...")
+
+        try:
+            # SimpleTodo.ico 파일 확인
+            if not self.icon_file.exists():
+                self.log(f"아이콘 파일을 찾을 수 없습니다: {self.icon_file}", "WARNING")
+                return False
+
+            # dist 폴더에 복사
+            dist_icon = self.dist_dir / 'SimpleTodo.ico'
+            shutil.copy2(self.icon_file, dist_icon)
+
+            self.log(f"아이콘 파일 복사 완료: {dist_icon}", "SUCCESS")
+            return True
+
+        except Exception as e:
+            self.log(f"아이콘 파일 복사 실패: {e}", "WARNING")
+            return False
 
     def cleanup_temp_files(self) -> bool:
         """임시 파일 정리"""

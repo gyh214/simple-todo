@@ -110,6 +110,15 @@ def main():
     app.setApplicationName(config.APP_NAME)
     app.setApplicationVersion(config.APP_VERSION)
 
+    # 애플리케이션 아이콘 설정 (작업관리자 아이콘)
+    from PyQt6.QtGui import QIcon
+    icon_path = config.get_resource_path(config.ICON_FILE)
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
+        logger.info(f"Application icon set: {icon_path}")
+    else:
+        logger.warning(f"Icon file not found: {icon_path}")
+
     # 단일 인스턴스 체크
     single_instance = SingleInstanceManager()
 

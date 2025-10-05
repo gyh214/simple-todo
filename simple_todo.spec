@@ -21,7 +21,7 @@ src_dir = spec_dir / 'src'
 main_script = str(spec_dir / 'main.py')
 
 # 아이콘 파일 경로
-icon_file = str(spec_dir / 'SimpleTodo.ico')
+icon_file = str(spec_dir / 'simple-todo.ico')
 
 # 버전 정보 파일 경로
 version_file = str(spec_dir / 'version_info.txt')
@@ -37,8 +37,8 @@ a = Analysis(
     # 바이너리 파일들
     binaries=[],
 
-    # 데이터 파일들
-    datas=[],
+    # 데이터 파일들 (아이콘 파일 자동 포함)
+    datas=[(str(icon_file), '.')] if os.path.exists(icon_file) else [],
 
     # 숨겨진 imports (자동 감지되지 않는 모듈들)
     hiddenimports=[

@@ -211,3 +211,42 @@ OPACITY_VALUES = {
     'hidden': 0.0,          # 숨김 상태 (delete button)
     'visible': 1.0,         # 표시 상태
 }
+
+# ============================================================================
+# 리소스 파일 경로 설정
+# ============================================================================
+
+# 아이콘 파일 경로 (상대 경로)
+ICON_FILE = "simple-todo.ico"
+
+
+def get_resource_path(relative_path):
+    """
+    리소스 파일 경로를 반환합니다 (EXE 단독 배포 지원).
+
+    개발 환경과 PyInstaller로 빌드된 환경 모두에서 올바른 경로를 반환합니다.
+    빌드 환경에서는 _MEIPASS에 추출된 리소스 파일을 사용합니다.
+
+    Args:
+        relative_path: 프로젝트 루트 기준 상대 경로 (Path 또는 str)
+
+    Returns:
+        Path: 리소스 파일의 절대 경로
+    """
+    # 파일명 추출
+    if isinstance(relative_path, Path):
+        filename = relative_path.name
+    else:
+        filename = str(relative_path)
+
+    # 빌드 환경 (PyInstaller)
+    if getattr(sys, 'frozen', False):
+        # _MEIPASS에서 리소스 파일 찾기
+        base_path = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        resource_path = base_path / filename
+        if resource_path.exists():
+            return resource_path
+
+    # 개발 환경
+    dev_path = PROJECT_ROOT / filename
+    return dev_path

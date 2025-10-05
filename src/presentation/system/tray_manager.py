@@ -40,9 +40,16 @@ class SystemTrayManager:
 
     def setup_tray(self) -> None:
         """트레이 아이콘 및 메뉴 설정"""
-        # 트레이 아이콘 생성 (파란색 체크마크)
-        icon = self._create_checkmark_icon()
-        self.tray_icon.setIcon(icon)
+        # 트레이 아이콘 설정 (SimpleTodo.ico 사용, 없으면 프로그래밍 방식으로 생성)
+        import config
+        icon_path = config.get_resource_path(config.ICON_FILE)
+        if icon_path.exists():
+            icon = QIcon(str(icon_path))
+            self.tray_icon.setIcon(icon)
+        else:
+            # 아이콘 파일이 없으면 프로그래밍 방식으로 생성
+            icon = self._create_checkmark_icon()
+            self.tray_icon.setIcon(icon)
 
         # 툴팁 설정
         self.tray_icon.setToolTip("Simple ToDo")

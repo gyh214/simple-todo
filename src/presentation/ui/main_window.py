@@ -83,6 +83,15 @@ class MainWindow(QMainWindow):
         """윈도우 기본 설정"""
         self.setWindowTitle(config.APP_NAME)
 
+        # 윈도우 아이콘 설정 (타이틀바 아이콘)
+        from PyQt6.QtGui import QIcon
+        icon_path = config.get_resource_path(config.ICON_FILE)
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+            logger.info(f"Window icon set: {icon_path}")
+        else:
+            logger.warning(f"Icon file not found: {icon_path}")
+
         # WindowManager를 통한 윈도우 설정
         if self.window_manager:
             self.window_manager.setup_window(

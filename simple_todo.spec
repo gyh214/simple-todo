@@ -92,6 +92,7 @@ a = Analysis(
         'src.domain.services.__init__',
         'src.domain.services.link_detection_service',
         'src.domain.services.todo_sort_service',
+        'src.domain.services.todo_search_service',
 
         # Domain - Value Objects
         'src.domain.value_objects',
@@ -152,6 +153,7 @@ a = Analysis(
         'src.presentation.dialogs',
         'src.presentation.dialogs.__init__',
         'src.presentation.dialogs.edit_dialog',
+        'src.presentation.dialogs.backup_manager_dialog',
 
         # Presentation - System
         'src.presentation.system',

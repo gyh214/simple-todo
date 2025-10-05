@@ -119,6 +119,8 @@ LAYOUT_MARGINS = {
     'header': (16, 10, 16, 10),
     'footer': (16, 6, 16, 6),
     'edit_dialog': (20, 20, 20, 20),
+    'backup_dialog': (20, 20, 20, 20),
+    'backup_dialog_tab': (15, 15, 15, 15),
 }
 
 # 레이아웃 간격 설정 (Spacing)
@@ -133,6 +135,8 @@ LAYOUT_SPACING = {
     'edit_dialog_main': 15,
     'edit_dialog_buttons': 10,
     'footer_main': 0,
+    'backup_dialog_tab': 12,
+    'backup_dialog_buttons': 10,
 }
 
 # 위젯 고정 크기 설정
@@ -145,6 +149,9 @@ WIDGET_SIZES = {
     'edit_dialog_size': (450, 750),
     'content_edit_height_min': 120,
     'content_edit_height_max': 150,
+    'backup_dialog_size': (520, 680),
+    'manage_btn_size': (60, 24),
+    'todo_text_line_height': 22,  # RichTextWidget 1줄 고정 높이 (base font 13px * 1.4 line-height + padding)
 }
 
 # 폰트 크기 설정
@@ -157,6 +164,7 @@ FONT_SIZES = {
     'xl': 16,    # splitter dots
     'xxl': 18,   # dialog title
     'xxxl': 20,  # app title
+    'dialog_tab': 14,  # dialog tab text
 }
 
 # UI 메트릭 (padding, border-radius, border-width)
@@ -187,6 +195,14 @@ SPLITTER_CONFIG = {
     'line_height_normal': 2,      # 기본 라인 높이
     'line_height_hover': 3,       # 호버 시 라인 높이
     'dots_font_size': 16,         # 점 3개('⋯') 폰트 크기
+}
+
+# 백업 다이얼로그 전용 설정
+BACKUP_DIALOG_LAYOUT = {
+    'file_list_ratio': 40,        # 백업 파일 목록 너비 비율 (%)
+    'preview_ratio': 60,          # TODO 미리보기 너비 비율 (%)
+    'checkbox_margins': (5, 5, 5, 5),  # 체크박스 영역 여백
+    'checkbox_spacing': 8,        # 체크박스 간격
 }
 
 # 투명도 값 설정

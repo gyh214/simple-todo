@@ -86,7 +86,6 @@ class TodoItemWidget(QWidget, DraggableMixin):
         # TODO 텍스트 (RichTextWidget 사용 - 링크/경로 인식)
         self.todo_text = RichTextWidget(str(self.todo.content))
         self.todo_text.setObjectName("todoText")
-        self.todo_text.setWordWrap(True)
         if self.todo.completed:
             self.todo_text.setProperty("completed", "true")
         content_layout.addWidget(self.todo_text)

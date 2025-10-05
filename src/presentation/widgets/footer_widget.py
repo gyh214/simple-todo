@@ -5,8 +5,8 @@ Phase 5-4: Footer 상태 표시 구현
 docs/todo-app-ui.html의 .footer 구조를 정확히 재현합니다.
 """
 
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
+from PyQt6.QtCore import Qt, pyqtSignal
 
 import config
 
@@ -17,11 +17,15 @@ class FooterWidget(QWidget):
     UI 구조:
     - 수평 레이아웃
     - 카운트 레이블: "진행중: X개 | 완료: Y개 | 전체: Z개"
+    - 관리 버튼: TODO 관리 다이얼로그 열기
 
     표시 형식:
     - 기본 텍스트: #B0B0B0 (config.COLORS['text_secondary'])
     - 숫자 강조: #CC785C (config.COLORS['accent']), font-weight: 600
     """
+
+    # 시그널
+    manage_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         """FooterWidget 초기화
@@ -51,6 +55,14 @@ class FooterWidget(QWidget):
 
         main_layout.addWidget(self.count_label)
         main_layout.addStretch()
+
+        # 관리 버튼
+        self.manage_btn = QPushButton("관리")
+        self.manage_btn.setObjectName("manageBtn")
+        self.manage_btn.setFixedSize(*config.WIDGET_SIZES['manage_btn_size'])
+        self.manage_btn.clicked.connect(self.manage_clicked.emit)
+
+        main_layout.addWidget(self.manage_btn)
 
     def update_counts(self, in_progress: int, completed: int) -> None:
         """카운트 업데이트 (MainWindow에서 호출)
@@ -84,6 +96,25 @@ class FooterWidget(QWidget):
         QLabel#statusLabel {{
             background: transparent;
             font-size: {config.FONT_SIZES['sm']}px;
+        }}
+
+        QPushButton#manageBtn {{
+            background: transparent;
+            border: {config.UI_METRICS['border_width']['thin']}px solid {config.COLORS['border']};
+            border-radius: {config.UI_METRICS['border_radius']['lg']}px;
+            padding: 4px 10px;
+            color: {config.COLORS['text_secondary']};
+            font-size: {config.FONT_SIZES['sm']}px;
+        }}
+
+        QPushButton#manageBtn:hover {{
+            border-color: {config.COLORS['accent']};
+            color: {config.COLORS['accent']};
+            background: rgba(204, 120, 92, 0.1);
+        }}
+
+        QPushButton#manageBtn:pressed {{
+            background: rgba(204, 120, 92, 0.2);
         }}
         """
 

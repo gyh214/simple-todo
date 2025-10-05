@@ -14,6 +14,7 @@ import os
 import subprocess
 from typing import List, Tuple
 from ..utils.link_parser import LinkParser
+import config
 
 
 class RichTextWidget(QLabel):
@@ -40,6 +41,10 @@ class RichTextWidget(QLabel):
         self.setTextFormat(Qt.TextFormat.RichText)
         self.setOpenExternalLinks(False)  # 수동 처리
 
+        # 1줄 고정 높이 및 줄바꿈 비활성화
+        self.setFixedHeight(config.WIDGET_SIZES['todo_text_line_height'])
+        self.setWordWrap(False)
+
         # 링크 클릭 시그널 연결
         self.linkActivated.connect(self._on_link_activated)
 
@@ -56,11 +61,7 @@ class RichTextWidget(QLabel):
             text: 새로운 텍스트
         """
         self.raw_text = text
-        self.links = LinkParser.parse_text(text)
-
-        # HTML 생성
-        html = self._convert_to_html(text, self.links)
-        self.setText(html)
+        self._update_elided_text()
 
     def _convert_to_html(self, text: str, links: List[Tuple[str, str, int, int]]) -> str:
         """텍스트를 HTML로 변환 (링크/경로 하이라이트).
@@ -259,3 +260,50 @@ class RichTextWidget(QLabel):
             [(타입, 텍스트, 시작, 끝), ...] 형식의 링크 리스트
         """
         return self.links
+
+    def _update_elided_text(self):
+        """너비에 맞게 텍스트를 elide 처리하고 HTML 변환.
+
+        텍스트가 너비를 넘으면 '...'로 표시하고,
+        전체 텍스트는 툴팁으로 보여줌.
+        """
+        if not self.raw_text:
+            self.setText("")
+            self.setToolTip("")
+            return
+
+        available_width = self.width() - 10
+        fm = self.fontMetrics()
+
+        # 텍스트가 넘치면 elide, 아니면 원본
+        if fm.horizontalAdvance(self.raw_text) > available_width:
+            display_text = fm.elidedText(self.raw_text, Qt.TextElideMode.ElideRight, available_width)
+            self.setToolTip(self.raw_text)
+        else:
+            display_text = self.raw_text
+            self.setToolTip("")
+
+        # 공통 처리 (DRY)
+        self.links = LinkParser.parse_text(display_text)
+        html = self._convert_to_html(display_text, self.links)
+        self.setText(html)
+
+    def resizeEvent(self, event):
+        """위젯 크기 변경 시 텍스트 다시 elide 처리.
+
+        Args:
+            event: resize 이벤트
+        """
+        super().resizeEvent(event)
+        if hasattr(self, 'raw_text'):
+            self._update_elided_text()
+
+    def showEvent(self, event):
+        """위젯 표시 시 텍스트 elide 처리.
+
+        Args:
+            event: show 이벤트
+        """
+        super().showEvent(event)
+        if hasattr(self, 'raw_text'):
+            self._update_elided_text()

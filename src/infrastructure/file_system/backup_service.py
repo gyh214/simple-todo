@@ -5,7 +5,7 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import logging
 
 # 로깅 설정
@@ -179,6 +179,42 @@ class BackupService:
         """
         return len(self._get_backup_files())
 
+    def _load_backup_json(self, backup_path: Path) -> Any:
+        """백업 파일에서 JSON 데이터를 로드합니다 (공통 메서드).
+
+        Args:
+            backup_path: 백업 파일 경로
+
+        Returns:
+            Any: 로드된 JSON 데이터 (dict 또는 list)
+
+        Raises:
+            json.JSONDecodeError: JSON 파싱 에러
+        """
+        with open(backup_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    def _extract_todos_data(self, data: Any) -> list:
+        """신규/레거시 포맷에서 TODO 데이터를 추출합니다 (공통 메서드).
+
+        Args:
+            data: 로드된 JSON 데이터
+
+        Returns:
+            list: TODO 딕셔너리 리스트
+
+        Raises:
+            ValueError: 잘못된 포맷
+        """
+        if isinstance(data, dict):
+            # 신규 포맷: {version, settings, todos}
+            return data.get('todos', [])
+        elif isinstance(data, list):
+            # 레거시 포맷: 배열
+            return data
+        else:
+            raise ValueError("Invalid backup format: expected dict or list")
+
     def verify_backup(self, backup_path: Path) -> bool:
         """백업 파일의 유효성을 검증합니다.
 
@@ -192,19 +228,90 @@ class BackupService:
             return False
 
         try:
-            with open(backup_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            # 공통 메서드 재사용
+            data = self._load_backup_json(backup_path)
 
-                # 기본 구조 검증
-                if isinstance(data, dict):
-                    # 신규 포맷
-                    return "version" in data and "todos" in data
-                elif isinstance(data, list):
-                    # 레거시 포맷
-                    return True
-                else:
-                    return False
+            # 기본 구조 검증
+            if isinstance(data, dict):
+                # 신규 포맷
+                return "version" in data and "todos" in data
+            elif isinstance(data, list):
+                # 레거시 포맷
+                return True
+            else:
+                return False
 
         except Exception as e:
             logger.error(f"Backup verification failed for {backup_path}: {e}")
             return False
+
+    def get_backup_list(self) -> List[Dict[str, Any]]:
+        """백업 파일 목록 + 메타정보 반환
+
+        Returns:
+            List[Dict]: 백업 정보 리스트 (최신순 정렬)
+                - filename: 파일명
+                - path: Path 객체
+                - size: 파일 크기 (bytes)
+                - created: 생성 시각 (timestamp)
+                - is_valid: 유효성 여부
+        """
+        backups = self._get_backup_files()  # 기존 private 메서드 재사용
+        backups.sort(reverse=True)  # 최신순
+
+        result = []
+        for filename in backups:
+            path = self.backup_dir / filename
+            result.append({
+                'filename': filename,
+                'path': path,
+                'size': path.stat().st_size,
+                'created': path.stat().st_mtime,
+                'is_valid': self.verify_backup(path)  # 기존 메서드 재사용
+            })
+
+        return result
+
+    def get_backup_todos(self, backup_path: Path) -> List['Todo']:
+        """백업 파일에서 TODO 목록을 반환합니다.
+
+        Args:
+            backup_path: 백업 파일 경로
+
+        Returns:
+            List[Todo]: TODO 엔티티 리스트
+
+        Raises:
+            FileNotFoundError: 백업 파일이 없는 경우
+            ValueError: JSON 파싱 에러 또는 잘못된 포맷
+        """
+        # 도메인 엔티티 import (메서드 내부에서)
+        from ...domain.entities.todo import Todo
+
+        # 1. 파일 존재 확인
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+
+        # 2. JSON 로드 (공통 메서드 재사용)
+        try:
+            data = self._load_backup_json(backup_path)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in backup file: {e}")
+
+        # 3. TODO 목록 추출 (공통 메서드 재사용)
+        todos_data = self._extract_todos_data(data)
+
+        # 4. Todo 엔티티 리스트 생성
+        todos = []
+        for todo_dict in todos_data:
+            try:
+                # Todo.from_dict() 재사용
+                todo = Todo.from_dict(todo_dict)
+                todos.append(todo)
+            except Exception as e:
+                logger.error(f"Failed to parse TODO: {todo_dict}, error: {e}")
+                # 에러 발생 시 해당 항목만 건너뛰기
+                continue
+
+        logger.info(f"Loaded {len(todos)} TODOs from backup: {backup_path}")
+        return todos

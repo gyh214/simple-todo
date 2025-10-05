@@ -7,13 +7,16 @@ MainWindow의 모든 이벤트 처리 로직을 담당합니다.
 - 정렬 변경
 - 드래그앤드롭
 - Splitter 이동 (throttle)
+- 백업 관리 다이얼로그
 """
 from typing import Optional, List
 from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QDialog
 import logging
 
 from src.domain.entities.todo import Todo
 from src.infrastructure.utils.debounce_manager import DebounceManager
+from src.presentation.dialogs.backup_manager_dialog import BackupManagerDialog
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,9 @@ class MainWindowEventHandler:
 
         # Splitter 이동
         self.splitter.splitterMoved.connect(self.on_splitter_moved)
+
+        # Footer: 관리 버튼 연결
+        self.footer_widget.manage_clicked.connect(self._on_manage_clicked)
 
     def on_splitter_moved(self, pos: int, index: int) -> None:
         """Splitter 이동 이벤트 (Throttle 100ms)
@@ -399,3 +405,26 @@ class MainWindowEventHandler:
 
         except Exception as e:
             logger.error(f"Failed to reorder todo: {e}", exc_info=True)
+
+    def _on_manage_clicked(self) -> None:
+        """관리 버튼 클릭 → BackupManagerDialog 표시
+
+        다이얼로그가 Accepted로 닫히면 TODO 목록을 갱신합니다.
+        (백업 복구 또는 삭제 작업 후)
+        """
+        try:
+            dialog = BackupManagerDialog(
+                parent=self.main_window,
+                repository=self.repository,
+                todo_service=self.todo_service
+            )
+
+            result = dialog.exec()
+
+            if result == QDialog.DialogCode.Accepted:
+                # 변경사항이 있으면 UI 갱신
+                logger.info("BackupManagerDialog closed with changes, refreshing UI")
+                self.load_todos()
+
+        except Exception as e:
+            logger.error(f"Failed to open backup manager dialog: {e}", exc_info=True)

@@ -46,7 +46,8 @@ DEFAULT_SETTINGS = {
 }
 
 # 백업 설정
-MAX_BACKUP_COUNT = 10  # 최근 10개 백업 유지
+MAX_BACKUP_COUNT = None  # 무제한 백업 보관 (삭제 안 함)
+BACKUP_DISPLAY_DAYS = 5  # 기본 표시 일수 (최근 5일)
 
 # 색상 테마 (Dark Mode)
 COLORS = {

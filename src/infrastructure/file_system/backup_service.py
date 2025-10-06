@@ -3,7 +3,7 @@
 
 import json
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import logging
@@ -19,13 +19,13 @@ class BackupService:
     데이터 손상 시 가장 최근 백업으로 자동 복구합니다.
     """
 
-    def __init__(self, data_file: Path, backup_dir: Path, max_backups: int = 10):
+    def __init__(self, data_file: Path, backup_dir: Path, max_backups: Optional[int] = None):
         """BackupService 초기화
 
         Args:
             data_file: 원본 데이터 파일 경로
             backup_dir: 백업 디렉토리 경로
-            max_backups: 유지할 최대 백업 개수 (기본값: 10)
+            max_backups: 유지할 최대 백업 개수 (None: 무제한)
         """
         self.data_file = data_file
         self.backup_dir = backup_dir
@@ -155,6 +155,10 @@ class BackupService:
 
     def _cleanup_old_backups(self) -> None:
         """오래된 백업 파일을 삭제하여 최대 개수를 유지합니다."""
+        # 무제한 보관 모드
+        if self.max_backups is None:
+            return
+
         backups = self._get_backup_files()
         if len(backups) <= self.max_backups:
             return
@@ -245,8 +249,11 @@ class BackupService:
             logger.error(f"Backup verification failed for {backup_path}: {e}")
             return False
 
-    def get_backup_list(self) -> List[Dict[str, Any]]:
+    def get_backup_list(self, days: Optional[int] = None) -> List[Dict[str, Any]]:
         """백업 파일 목록 + 메타정보 반환
+
+        Args:
+            days: 최근 N일 백업만 반환 (None이면 전체)
 
         Returns:
             List[Dict]: 백업 정보 리스트 (최신순 정렬)
@@ -260,8 +267,29 @@ class BackupService:
         backups.sort(reverse=True)  # 최신순
 
         result = []
+        cutoff_date = None
+
+        # 일수 필터링 준비
+        if days is not None:
+            cutoff_date = datetime.now() - timedelta(days=days)
+
         for filename in backups:
             path = self.backup_dir / filename
+
+            # 일수 필터링
+            if cutoff_date is not None:
+                try:
+                    # 파일명에서 날짜 추출: data_20251005_102213.json -> 20251005
+                    date_str = filename.split('_')[1]
+                    backup_date = datetime.strptime(date_str, '%Y%m%d')
+
+                    # cutoff_date보다 오래된 백업은 스킵
+                    if backup_date.date() < cutoff_date.date():
+                        continue
+                except (IndexError, ValueError):
+                    # 파일명 형식이 다르면 포함 (레거시 백업 등)
+                    pass
+
             result.append({
                 'filename': filename,
                 'path': path,

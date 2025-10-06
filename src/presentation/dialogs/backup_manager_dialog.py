@@ -7,7 +7,8 @@ from PyQt6.QtWidgets import (
     QCheckBox, QScrollArea, QWidget, QMessageBox
 )
 from PyQt6.QtCore import Qt
-from typing import List
+from PyQt6.QtGui import QIntValidator
+from typing import List, Dict
 
 import config
 
@@ -32,6 +33,9 @@ class BackupManagerDialog(QDialog):
         # TodoSearchService import
         from src.domain.services.todo_search_service import TodoSearchService
         self.search_service = TodoSearchService()
+
+        # 백업 표시 일수 (config에서 기본값)
+        self.backup_display_days = config.BACKUP_DISPLAY_DAYS
 
         self.setup_ui()
         self.apply_styles()
@@ -98,9 +102,42 @@ class BackupManagerDialog(QDialog):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(8)
 
-        left_label = QLabel("백업 파일 목록")
-        left_label.setObjectName("sectionLabel")
-        left_layout.addWidget(left_label)
+        # === 상단: 일수 필터 + 검색 (한 줄) ===
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(config.LAYOUT_SPACING['backup_dialog_buttons'])
+
+        # 일수 필터
+        days_label = QLabel("최근")
+        days_label.setObjectName("sectionLabel")
+        filter_layout.addWidget(days_label)
+
+        self.days_input = QLineEdit()
+        self.days_input.setObjectName("searchInput")
+        self.days_input.setText(str(self.backup_display_days))
+        self.days_input.setFixedWidth(50)
+        self.days_input.setValidator(QIntValidator(1, 365))
+        self.days_input.textChanged.connect(self._on_days_changed)
+        filter_layout.addWidget(self.days_input)
+
+        days_suffix_label = QLabel("일")
+        days_suffix_label.setObjectName("sectionLabel")
+        filter_layout.addWidget(days_suffix_label)
+
+        # 검색창
+        self.backup_search_input = QLineEdit()
+        self.backup_search_input.setObjectName("searchInput")
+        self.backup_search_input.setPlaceholderText("백업 파일 내 할일 검색...")
+        self.backup_search_input.returnPressed.connect(self._on_search_backups)
+        filter_layout.addWidget(self.backup_search_input)
+
+        # 검색 버튼 (크기 축소)
+        backup_search_btn = QPushButton("검색")
+        backup_search_btn.setObjectName("searchBtn")
+        backup_search_btn.setFixedWidth(60)
+        backup_search_btn.clicked.connect(self._on_search_backups)
+        filter_layout.addWidget(backup_search_btn)
+
+        left_layout.addLayout(filter_layout)
 
         self.backup_list = QListWidget()
         self.backup_list.setObjectName("backupList")
@@ -277,26 +314,33 @@ class BackupManagerDialog(QDialog):
         self._load_todo_checkboxes()
 
     def _load_backup_list(self):
-        """백업 목록 로드"""
-        self.backup_list.clear()
-
+        """백업 목록 로드 (일수 필터 적용)"""
         if not self.backup_service:
             return
 
-        backups = self.backup_service.get_backup_list()
+        # days_input이 있으면 값 읽기, 없거나 빈 값이면 기본값
+        if hasattr(self, 'days_input'):
+            days_text = self.days_input.text().strip()
+            days = int(days_text) if days_text else self.backup_display_days
+        else:
+            days = self.backup_display_days
+
+        backups = self.backup_service.get_backup_list(days=days)
+        self._display_backup_list(backups)
+
+    def _display_backup_list(self, backups: List[Dict]):
+        """백업 목록 UI 표시 (공통 메서드)"""
+        self.backup_list.clear()
+
         for backup in backups:
-            # 파일명에서 타임스탬프 추출
             filename = backup['filename']
             size_kb = backup['size'] / 1024
-
-            # 표시 형식: "data_20251005_102213 (1.2KB)"
             display_text = f"{filename} ({size_kb:.1f}KB)"
 
             if not backup['is_valid']:
                 display_text += " [손상됨]"
 
             self.backup_list.addItem(display_text)
-            # userData에 실제 경로 저장
             item = self.backup_list.item(self.backup_list.count() - 1)
             item.setData(Qt.ItemDataRole.UserRole, backup['path'])
 
@@ -332,6 +376,53 @@ class BackupManagerDialog(QDialog):
             checkbox.setObjectName("todoCheckbox")
             self.checkbox_layout.insertWidget(self.checkbox_layout.count() - 1, checkbox)
             self.todo_checkboxes.append((checkbox, str(todo.id.value)))
+
+    def _on_days_changed(self):
+        """일수 변경 시 목록 재로드"""
+        days_text = self.days_input.text().strip()
+        if days_text:
+            try:
+                self.backup_display_days = int(days_text)
+                self._load_backup_list()
+            except ValueError:
+                pass  # 유효하지 않은 입력은 무시
+
+    def _on_search_backups(self):
+        """백업 파일 검색 (TODO 내용 기반)"""
+        query = self.backup_search_input.text()
+
+        if not self.backup_service:
+            return
+
+        # 일수 필터 적용하여 백업 목록 가져오기
+        days_text = self.days_input.text().strip()
+        days = int(days_text) if days_text else self.backup_display_days
+        all_backups = self.backup_service.get_backup_list(days=days)
+
+        # 검색어가 없으면 전체 표시
+        if not query.strip():
+            self._display_backup_list(all_backups)
+            return
+
+        # 각 백업 파일 스캔
+        filtered_backups = []
+        for backup in all_backups:
+            try:
+                # 백업의 TODO 목록 로드 (기존 메서드 재사용)
+                todos = self.backup_service.get_backup_todos(backup['path'])
+
+                # TodoSearchService로 검색 (기존 서비스 재사용)
+                matched = self.search_service.search_todos(query, todos)
+
+                # 매칭되는 TODO가 있으면 포함
+                if matched:
+                    filtered_backups.append(backup)
+            except Exception:
+                # 손상된 파일은 스킵
+                continue
+
+        # 필터링된 결과 표시
+        self._display_backup_list(filtered_backups)
 
     def _on_search(self):
         """검색 실행"""

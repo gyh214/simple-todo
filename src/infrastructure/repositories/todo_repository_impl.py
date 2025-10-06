@@ -26,13 +26,13 @@ class TodoRepositoryImpl(ITodoRepository):
     데이터 영속성을 담당하며, 자동 백업 및 레거시 마이그레이션을 지원합니다.
     """
 
-    def __init__(self, data_file: Path, backup_dir: Path, max_backups: int = 10):
+    def __init__(self, data_file: Path, backup_dir: Path, max_backups: Optional[int] = None):
         """TodoRepositoryImpl 초기화
 
         Args:
             data_file: 데이터 파일 경로
             backup_dir: 백업 디렉토리 경로
-            max_backups: 최대 백업 개수
+            max_backups: 최대 백업 개수 (None: 무제한)
         """
         self.data_file = data_file
         self.backup_service = BackupService(data_file, backup_dir, max_backups)

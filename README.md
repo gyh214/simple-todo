@@ -6,6 +6,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![Python](https://img.shields.io/badge/python-3.7+-green)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
+[![Download](https://img.shields.io/github/v/release/gyh214/simple-todo?label=Download&color=success)](https://github.com/gyh214/simple-todo/releases/latest)
 
 ---
 

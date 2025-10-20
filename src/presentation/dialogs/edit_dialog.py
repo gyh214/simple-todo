@@ -130,8 +130,17 @@ class EditDialog(QDialog):
             except (ValueError, AttributeError):
                 pass
         else:
-            self.calendar.setSelectedDate(QDate.currentDate())
-            self._update_date_label(None)
+            # 신규 추가 모드일 때 오늘 날짜 자동 선택
+            if todo_id is None:
+                # 신규 추가 모드: 오늘 날짜 자동 선택 및 표시
+                today = QDate.currentDate()
+                self.calendar.setSelectedDate(today)
+                today_str = today.toString(Qt.DateFormat.ISODate)
+                self._update_date_label(today_str)
+            else:
+                # 편집 모드에서 날짜 없음: 오늘 날짜 선택하되 "없음" 표시
+                self.calendar.setSelectedDate(QDate.currentDate())
+                self._update_date_label(None)
 
     def _on_date_clicked(self, qdate: QDate):
         """캘린더 날짜 클릭 시"""
@@ -285,5 +294,48 @@ class EditDialog(QDialog):
 
             QPushButton#clearBtn:pressed {{
                 background: rgba(64, 64, 64, 0.1);
+            }}
+
+            /* Calendar Widget */
+            QCalendarWidget QWidget {{
+                background-color: {config.COLORS['card']};
+                color: {config.COLORS['text_primary']};
+            }}
+
+            QCalendarWidget QAbstractItemView:enabled {{
+                background-color: {config.COLORS['secondary_bg']};
+                selection-background-color: {config.COLORS['accent']};
+                selection-color: white;
+                border-radius: {config.UI_METRICS['border_radius']['sm']}px;
+            }}
+
+            QCalendarWidget QWidget#qt_calendar_navigationbar {{
+                background-color: {config.COLORS['card']};
+            }}
+
+            QCalendarWidget QToolButton {{
+                color: {config.COLORS['text_primary']};
+                background-color: transparent;
+                border-radius: {config.UI_METRICS['border_radius']['sm']}px;
+                padding: {config.UI_METRICS['padding']['sm'][0]}px;
+            }}
+
+            QCalendarWidget QToolButton:hover {{
+                background-color: {config.COLORS['card_hover']};
+            }}
+
+            QCalendarWidget QMenu {{
+                background-color: {config.COLORS['secondary_bg']};
+                color: {config.COLORS['text_primary']};
+                border: {config.UI_METRICS['border_width']['thin']}px solid {config.COLORS['border']};
+            }}
+
+            QCalendarWidget QSpinBox {{
+                background-color: {config.COLORS['card']};
+                color: {config.COLORS['text_primary']};
+                selection-background-color: {config.COLORS['accent']};
+                border: {config.UI_METRICS['border_width']['thin']}px solid {config.COLORS['border']};
+                border-radius: {config.UI_METRICS['border_radius']['sm']}px;
+                padding: {config.UI_METRICS['padding']['sm'][0]}px;
             }}
         """)

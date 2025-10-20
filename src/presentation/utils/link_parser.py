@@ -15,7 +15,10 @@ class LinkParser:
     # URL: 구두점(쉼표, 세미콜론, 마침표 등)을 제외
     URL_PATTERN = r'(https?://[^\s,;!?]+)|(www\.[^\s,;!?]+)'
     # 파일 경로: Windows 절대 경로 및 네트워크 경로
-    PATH_PATTERN = r'([A-Za-z]:\\[\\\w\s\-\.]+)|(\\\\[\w\-\.]+\\[\\\w\s\-\.]+)'
+    # - 백슬래시로 끝나는 폴더 경로: "C:\Users\", "C:\Program Files\"
+    # - 파일로 끝나는 경로: "C:\file.txt", "C:\Program Files\app.exe"
+    # - 백슬래시 뒤 공백으로 경로 종료: "C:\Users\ 정리" → "C:\Users\"
+    PATH_PATTERN = r'([A-Za-z]:\\(?:(?:[^\\]+\\)+|(?:[^\\]+\\)*[^\\\s]+))|(\\\\[^\\\s]+\\(?:(?:[^\\]+\\)+|(?:[^\\]+\\)*[^\\\s]+))'
 
     @staticmethod
     def parse_text(text: str) -> List[Tuple[str, str, int, int]]:

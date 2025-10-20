@@ -63,32 +63,53 @@ class RichTextWidget(QLabel):
         self.raw_text = text
         self._update_elided_text()
 
-    def _convert_to_html(self, text: str, links: List[Tuple[str, str, int, int]]) -> str:
+    def _convert_to_html(self, display_text: str, original_links: List[Tuple[str, str, int, int]]) -> str:
         """텍스트를 HTML로 변환 (링크/경로 하이라이트).
 
         Args:
-            text: 원본 텍스트
-            links: [(타입, 텍스트, 시작, 끝), ...] 형식의 링크 리스트
+            display_text: 화면에 표시될 텍스트 (elided 가능)
+            original_links: 원본 텍스트에서 추출한 링크 리스트 [(타입, 텍스트, 시작, 끝), ...]
 
         Returns:
             HTML 문자열
         """
-        if not links:
+        if not original_links:
             # 링크가 없으면 텍스트만 반환
-            return self._escape_html(text)
+            return self._escape_html(display_text)
 
         # 링크를 <a> 태그로 변환
         result = []
         last_end = 0
 
-        for link_type, link_text, start, end in links:
+        for link_type, original_link_text, original_start, original_end in original_links:
+            # display_text에서 링크 시작 위치 찾기
+            # 원본 텍스트의 시작 위치를 기준으로 display_text에서 매칭
+            if original_start >= len(display_text):
+                # 링크가 display_text 범위를 넘어서면 중단
+                break
+
+            # display_text에서 실제 표시될 링크 텍스트 찾기
+            # 링크 시작 위치부터 원본 링크의 시작 패턴 매칭
+            display_start = original_start
+
+            # 링크 끝 위치 계산 (elided된 경우 "..." 포함)
+            if original_end <= len(display_text):
+                # 링크가 잘리지 않음
+                display_end = original_end
+                display_link_text = display_text[display_start:display_end]
+            else:
+                # 링크가 잘림 - "..."까지를 표시 텍스트로 사용
+                # display_text에서 링크 시작부터 끝까지 (또는 "..."까지)
+                display_end = len(display_text)
+                display_link_text = display_text[display_start:display_end]
+
             # 링크 이전 텍스트 추가
-            if start > last_end:
-                result.append(self._escape_html(text[last_end:start]))
+            if display_start > last_end:
+                result.append(self._escape_html(display_text[last_end:display_start]))
 
             # 링크를 <a> 태그로 변환
-            # href는 "type:text" 형식으로 인코딩
-            href = f"{link_type}:{link_text}"
+            # href는 "type:original_text" 형식으로 원본 링크 사용
+            href = f"{link_type}:{original_link_text}"
 
             # URL과 Path에 따라 다른 스타일 적용
             if link_type == 'url':
@@ -97,7 +118,7 @@ class RichTextWidget(QLabel):
                     f'<a href="{self._escape_html(href)}" '
                     f'style="color: #CC785C; text-decoration: underline;" '
                     f'data-type="url">'
-                    f'{self._escape_html(link_text)}</a>'
+                    f'{self._escape_html(display_link_text)}</a>'
                 )
             else:  # path
                 # Path: #CC785C, 밑줄, opacity 0.8
@@ -105,14 +126,14 @@ class RichTextWidget(QLabel):
                     f'<a href="{self._escape_html(href)}" '
                     f'style="color: #CC785C; text-decoration: underline; opacity: 0.8;" '
                     f'data-type="path">'
-                    f'{self._escape_html(link_text)}</a>'
+                    f'{self._escape_html(display_link_text)}</a>'
                 )
 
-            last_end = end
+            last_end = display_end
 
         # 마지막 링크 이후 텍스트 추가
-        if last_end < len(text):
-            result.append(self._escape_html(text[last_end:]))
+        if last_end < len(display_text):
+            result.append(self._escape_html(display_text[last_end:]))
 
         # 스타일 추가
         html = f"""
@@ -266,25 +287,35 @@ class RichTextWidget(QLabel):
 
         텍스트가 너비를 넘으면 '...'로 표시하고,
         전체 텍스트는 툴팁으로 보여줌.
+        개행 문자는 공백으로 치환하여 1줄로 표시.
         """
         if not self.raw_text:
             self.setText("")
             self.setToolTip("")
             return
 
+        # 개행 문자를 공백으로 치환 (1줄 표시용)
+        single_line_text = self.raw_text.replace('\n', ' ').replace('\r', ' ')
+
         available_width = self.width() - 10
         fm = self.fontMetrics()
 
         # 텍스트가 넘치면 elide, 아니면 원본
-        if fm.horizontalAdvance(self.raw_text) > available_width:
-            display_text = fm.elidedText(self.raw_text, Qt.TextElideMode.ElideRight, available_width)
-            self.setToolTip(self.raw_text)
+        if fm.horizontalAdvance(single_line_text) > available_width:
+            display_text = fm.elidedText(single_line_text, Qt.TextElideMode.ElideRight, available_width)
+            self.setToolTip(self.raw_text)  # 툴팁에는 원본 텍스트 (개행 포함)
         else:
-            display_text = self.raw_text
-            self.setToolTip("")
+            display_text = single_line_text
+            # 원본에 개행이 있으면 툴팁에 표시
+            if '\n' in self.raw_text or '\r' in self.raw_text:
+                self.setToolTip(self.raw_text)
+            else:
+                self.setToolTip("")
 
-        # 공통 처리 (DRY)
-        self.links = LinkParser.parse_text(display_text)
+        # 원본 텍스트(single_line_text)에서 링크 파싱 - 원본 링크 정보 보존
+        self.links = LinkParser.parse_text(single_line_text)
+
+        # HTML 변환 시 display_text 사용하되, 링크는 원본 사용
         html = self._convert_to_html(display_text, self.links)
         self.setText(html)
 

@@ -8,6 +8,7 @@ MainWindow의 모든 이벤트 처리 로직을 담당합니다.
 - 드래그앤드롭
 - Splitter 이동 (throttle)
 - 백업 관리 다이얼로그
+- 검색 (실시간)
 """
 from typing import Optional, List
 from PyQt6.QtCore import QTimer
@@ -15,6 +16,7 @@ from PyQt6.QtWidgets import QDialog
 import logging
 
 from src.domain.entities.todo import Todo
+from src.domain.services.todo_search_service import TodoSearchService
 from src.infrastructure.utils.debounce_manager import DebounceManager
 from src.presentation.dialogs.backup_manager_dialog import BackupManagerDialog
 
@@ -76,6 +78,9 @@ class MainWindowEventHandler:
 
         # 헤더: 정렬 변경
         self.header_widget.sort_combo.currentIndexChanged.connect(self.on_sort_changed)
+
+        # 헤더: 검색 입력 실시간 감지
+        self.header_widget.search_input.textChanged.connect(self.on_search_text_changed)
 
         # 섹션: TODO 이벤트
         self.in_progress_section.todo_deleted.connect(self.on_todo_delete)
@@ -256,6 +261,31 @@ class MainWindowEventHandler:
 
         except Exception as e:
             logger.error(f"Failed to sort todos: {e}", exc_info=True)
+
+    def on_search_text_changed(self, query: str) -> None:
+        """검색어 입력 실시간 처리
+
+        Args:
+            query: 검색어
+        """
+        try:
+            # 전체 TODO 가져오기
+            all_todos = self.repository.find_all()
+
+            # 검색 실행 (TodoSearchService 사용)
+            filtered_todos = TodoSearchService.search_todos(query, all_todos)
+
+            # 섹션별 분리
+            in_progress = [todo for todo in filtered_todos if not todo.completed]
+            completed = [todo for todo in filtered_todos if todo.completed]
+
+            # UI 갱신
+            self._refresh_ui(in_progress, completed)
+
+            logger.debug(f"Search: '{query}' → {len(filtered_todos)} results")
+
+        except Exception as e:
+            logger.error(f"Failed to search todos: {e}", exc_info=True)
 
     def on_add_todo(self) -> None:
         """할일 추가 핸들러 (다이얼로그 사용)"""

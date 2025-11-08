@@ -7,7 +7,7 @@ TODO 편집 다이얼로그 구현
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QPushButton,
                             QHBoxLayout, QLabel, QCalendarWidget, QWidget,
                             QScrollArea, QCheckBox, QListWidget, QListWidgetItem,
-                            QComboBox, QMessageBox)
+                            QComboBox, QMessageBox, QFrame)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate
 from typing import Optional, List
 from datetime import datetime
@@ -15,6 +15,7 @@ import config
 from ...domain.entities.subtask import SubTask
 from ...domain.value_objects.todo_id import TodoId
 from ...domain.value_objects.recurrence_rule import RecurrenceRule
+from .date_picker_dialog import DatePickerDialog
 
 
 class CollapsibleSection(QWidget):
@@ -119,52 +120,66 @@ class EditDialog(QDialog):
 
     def setup_ui(self):
         """UI 구성"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(*config.LAYOUT_MARGINS['edit_dialog'])
-        layout.setSpacing(config.LAYOUT_SPACING['edit_dialog_main'])
+        # 메인 레이아웃
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # === 스크롤 영역 ===
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        # 콘텐츠 컨테이너
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(24, 24, 24, 24)
+        content_layout.setSpacing(16)
 
         # 제목
         self.title_label = QLabel("TODO 편집")
         self.title_label.setObjectName("titleLabel")
-        layout.addWidget(self.title_label)
+        content_layout.addWidget(self.title_label)
 
         # 내용 입력 섹션
         content_label = QLabel("내용")
         content_label.setObjectName("sectionLabel")
-        layout.addWidget(content_label)
+        content_layout.addWidget(content_label)
 
         self.content_edit = QTextEdit()
         self.content_edit.setObjectName("contentEdit")
         self.content_edit.setPlaceholderText("할일 내용을 입력하세요...")
         self.content_edit.setMinimumHeight(config.WIDGET_SIZES['content_edit_height_min'])
         self.content_edit.setMaximumHeight(config.WIDGET_SIZES['content_edit_height_max'])
-        layout.addWidget(self.content_edit)
+        content_layout.addWidget(self.content_edit)
 
         # 날짜 선택 섹션
         date_label = QLabel("납기일")
         date_label.setObjectName("sectionLabel")
-        layout.addWidget(date_label)
+        content_layout.addWidget(date_label)
 
         # 캘린더 위젯 (PyQt6 기본 제공)
         self.calendar = QCalendarWidget(self)
         self.calendar.setGridVisible(True)
         self.calendar.clicked.connect(self._on_date_clicked)
-        layout.addWidget(self.calendar)
+        content_layout.addWidget(self.calendar)
 
         # 날짜 클리어 버튼
         self.clear_date_btn = QPushButton("날짜 제거")
         self.clear_date_btn.setObjectName("clearBtn")
         self.clear_date_btn.clicked.connect(self._on_clear_date)
-        layout.addWidget(self.clear_date_btn)
+        content_layout.addWidget(self.clear_date_btn)
 
         # 선택된 날짜 표시
         self.selected_date_label = QLabel("선택된 날짜: 없음")
         self.selected_date_label.setObjectName("selectedDateLabel")
-        layout.addWidget(self.selected_date_label)
+        content_layout.addWidget(self.selected_date_label)
 
         # 하위 할일 섹션 (접을 수 있는 섹션)
         self.subtasks_section = CollapsibleSection("하위 할일", "0/0 완료")
-        layout.addWidget(self.subtasks_section)
+        content_layout.addWidget(self.subtasks_section)
 
         # 하위 할일 추가 버튼
         add_subtask_btn = QPushButton("+ 하위 할일 추가")
@@ -176,12 +191,12 @@ class EditDialog(QDialog):
         self.subtasks_list = QListWidget()
         self.subtasks_list.setObjectName("subtasksList")
         self.subtasks_list.setMinimumHeight(100)
-        self.subtasks_list.setMaximumHeight(200)
+        self.subtasks_list.setMaximumHeight(300)  # 200 → 300으로 증가하여 더 많은 하위 할일 표시
         self.subtasks_section.add_content(self.subtasks_list)
 
         # 반복 설정 섹션 (접을 수 있는 구조)
         self.recurrence_section = CollapsibleSection("반복 설정")
-        layout.addWidget(self.recurrence_section)
+        content_layout.addWidget(self.recurrence_section)
 
         # 반복 설정 컨테이너
         recurrence_container = QWidget()
@@ -276,8 +291,13 @@ class EditDialog(QDialog):
 
         self.recurrence_section.add_content(recurrence_container)
 
-        # 버튼 영역
+        # 스크롤 영역 설정
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
+
+        # === 버튼 영역 (하단 고정) ===
         button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(24, 16, 24, 24)
         button_layout.setSpacing(config.LAYOUT_SPACING['edit_dialog_buttons'])
 
         self.cancel_btn = QPushButton("취소")
@@ -292,7 +312,7 @@ class EditDialog(QDialog):
         button_layout.addWidget(self.cancel_btn)
         button_layout.addWidget(self.save_btn)
 
-        layout.addLayout(button_layout)
+        main_layout.addLayout(button_layout)
 
         # 내용 입력창에 포커스
         self.content_edit.setFocus()
@@ -336,45 +356,35 @@ class EditDialog(QDialog):
 
     def _on_recurrence_end_select(self) -> None:
         """종료일 선택 다이얼로그"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("종료일 선택")
-        dialog.setModal(True)
-        layout = QVBoxLayout(dialog)
-
-        calendar = QCalendarWidget()
-        calendar.setMinimumDate(QDate.currentDate())  # 오늘 이후만 선택 가능
-
-        # 기존 종료일이 있으면 선택
+        # 기존 종료일을 datetime 객체로 변환
+        initial_date = None
         if self.recurrence_end_date:
             try:
                 if isinstance(self.recurrence_end_date, datetime):
-                    qdate = QDate(self.recurrence_end_date.year,
-                                  self.recurrence_end_date.month,
-                                  self.recurrence_end_date.day)
+                    initial_date = self.recurrence_end_date
                 else:
-                    # date 객체인 경우
-                    qdate = QDate(self.recurrence_end_date.year,
-                                  self.recurrence_end_date.month,
-                                  self.recurrence_end_date.day)
-                calendar.setSelectedDate(qdate)
+                    # date 객체인 경우 datetime으로 변환
+                    initial_date = datetime.combine(
+                        self.recurrence_end_date,
+                        datetime.min.time()
+                    )
             except:
                 pass
 
-        layout.addWidget(calendar)
-
-        btn_layout = QHBoxLayout()
-        ok_btn = QPushButton("확인")
-        ok_btn.clicked.connect(dialog.accept)
-        cancel_btn = QPushButton("취소")
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(ok_btn)
-        btn_layout.addWidget(cancel_btn)
-        layout.addLayout(btn_layout)
+        # DatePickerDialog 사용
+        dialog = DatePickerDialog(
+            parent=self,
+            title="종료일 선택",
+            initial_date=initial_date,
+            min_date=QDate.currentDate(),
+            show_clear_button=False
+        )
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            selected_date = calendar.selectedDate()
-            self.recurrence_end_date = selected_date.toPyDate()
-            self.recurrence_end_btn.setText(selected_date.toString("yyyy-MM-dd"))
+            selected = dialog.get_selected_date()
+            if selected:
+                self.recurrence_end_date = selected.date()
+                self.recurrence_end_btn.setText(selected.strftime("%Y-%m-%d"))
 
     def _update_recurrence_description(self) -> None:
         """반복 설명 업데이트"""
@@ -493,15 +503,22 @@ class EditDialog(QDialog):
             # 설명 업데이트
             self._update_recurrence_description()
         else:
+            # 반복 설정 없음: 초기화
             self.recurrence_enabled_checkbox.setChecked(False)
-            # 초기화
             self.recurrence_end_checkbox.setChecked(False)
             self.recurrence_end_date = None
             self.recurrence_end_btn.setText("날짜 선택")
             for checkbox in self.weekday_checkboxes:
                 checkbox.setChecked(False)
-            self.copy_subtasks_checkbox.setChecked(False)
             self.weekdays_container.setVisible(False)
+
+            # P2-4 수정: 신규 추가 모드일 때 하위 할일 복사 기본값 체크
+            if todo_id is None:
+                # 신규 추가 모드: 하위 할일 복사 옵션 기본 체크
+                self.copy_subtasks_checkbox.setChecked(True)
+            else:
+                # 편집 모드: 체크 해제
+                self.copy_subtasks_checkbox.setChecked(False)
 
     def _on_date_clicked(self, qdate: QDate):
         """캘린더 날짜 클릭 시"""
@@ -721,6 +738,37 @@ class EditDialog(QDialog):
             QDialog {{
                 background: {config.COLORS['secondary_bg']};
                 border-radius: {config.UI_METRICS['border_radius']['xl']}px;
+            }}
+
+            /* Scroll Area */
+            QScrollArea {{
+                background: transparent;
+                border: none;
+            }}
+
+            QScrollBar:vertical {{
+                background: {config.COLORS['secondary_bg']};
+                width: 10px;
+                border-radius: 5px;
+                margin: 0px;
+            }}
+
+            QScrollBar::handle:vertical {{
+                background: {config.COLORS['border_strong']};
+                min-height: 20px;
+                border-radius: 5px;
+            }}
+
+            QScrollBar::handle:vertical:hover {{
+                background: {config.COLORS['accent']};
+            }}
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
             }}
 
             QLabel#titleLabel {{
@@ -1082,53 +1130,37 @@ class SubTaskEditDialog(QDialog):
         # 내용 입력창에 포커스
         self.content_edit.setFocus()
 
-        # 선택된 날짜 저장
+        # 선택된 날짜 저장용 변수
         self.selected_date: Optional[str] = None
 
     def _on_select_date(self):
         """날짜 선택 다이얼로그 표시"""
-        # 간단한 캘린더 다이얼로그
-        cal_dialog = QDialog(self)
-        cal_dialog.setWindowTitle("날짜 선택")
-        cal_dialog.setModal(True)
-
-        cal_layout = QVBoxLayout(cal_dialog)
-        calendar = QCalendarWidget()
-        calendar.setGridVisible(True)
+        # 기존 선택된 날짜를 datetime 객체로 변환
+        initial_date = None
         if self.selected_date:
             try:
-                dt = datetime.fromisoformat(self.selected_date)
-                calendar.setSelectedDate(QDate(dt.year, dt.month, dt.day))
+                initial_date = datetime.fromisoformat(self.selected_date)
             except:
                 pass
-        cal_layout.addWidget(calendar)
 
-        # 버튼
-        btn_layout = QHBoxLayout()
-        clear_btn = QPushButton("날짜 제거")
-        clear_btn.clicked.connect(lambda: self._set_date(None, cal_dialog))
-        ok_btn = QPushButton("확인")
-        ok_btn.clicked.connect(lambda: self._set_date(calendar.selectedDate().toString(Qt.DateFormat.ISODate), cal_dialog))
+        # DatePickerDialog 사용
+        dialog = DatePickerDialog(
+            parent=self,
+            title="날짜 선택",
+            initial_date=initial_date,
+            show_clear_button=True
+        )
 
-        btn_layout.addWidget(clear_btn)
-        btn_layout.addStretch()
-        btn_layout.addWidget(ok_btn)
-        cal_layout.addLayout(btn_layout)
-
-        cal_dialog.exec()
-
-    def _set_date(self, date_str: Optional[str], dialog: QDialog):
-        """날짜 설정"""
-        self.selected_date = date_str
-        if date_str:
-            try:
-                dt = datetime.fromisoformat(date_str)
-                self.selected_date_label.setText(dt.strftime("%Y년 %m월 %d일"))
-            except:
-                self.selected_date_label.setText(date_str)
-        else:
-            self.selected_date_label.setText("없음")
-        dialog.accept()
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected = dialog.get_selected_date()
+            if selected:
+                # 날짜 선택됨
+                self.selected_date = selected.strftime("%Y-%m-%d")
+                self.selected_date_label.setText(selected.strftime("%Y년 %m월 %d일"))
+            else:
+                # 날짜 제거됨
+                self.selected_date = None
+                self.selected_date_label.setText("없음")
 
     def _on_save(self):
         """저장 버튼 클릭"""

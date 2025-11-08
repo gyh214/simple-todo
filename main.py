@@ -5,6 +5,7 @@ Simple ToDo 애플리케이션 진입점
 import sys
 import logging
 from pathlib import Path
+from datetime import datetime
 from PyQt6.QtWidgets import QApplication
 
 import config
@@ -12,12 +13,28 @@ from src.core.container import Container, ServiceNames
 from src.presentation.ui.main_window import MainWindow
 from src.infrastructure.repositories.todo_repository_impl import TodoRepositoryImpl
 
-# 로깅 설정
+# 로그 디렉토리 생성
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+# 로그 파일명 (타임스탬프 포함)
+LOG_FILE = LOG_DIR / f"app_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+
+# 로깅 설정 (파일 + 콘솔)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        # 파일 핸들러 (모든 로그를 파일에 저장)
+        logging.FileHandler(LOG_FILE, encoding='utf-8'),
+        # 콘솔 핸들러 (INFO 이상만 콘솔에 출력)
+        logging.StreamHandler(sys.stdout)
+    ]
 )
+
 logger = logging.getLogger(__name__)
+logger.info(f"=== {config.APP_NAME} 시작 ===")
+logger.info(f"로그 파일: {LOG_FILE}")
 
 
 def initialize_infrastructure_layer():
@@ -159,6 +176,7 @@ def main():
     window.show()
 
     logger.info(f"{config.APP_NAME} started successfully")
+    logger.info(f"로그는 {LOG_FILE}에 저장됩니다")
 
     # 이벤트 루프 실행
     exit_code = app.exec()
@@ -166,6 +184,7 @@ def main():
     # 정리
     single_instance.cleanup()
 
+    logger.info(f"=== {config.APP_NAME} 종료 (exit_code: {exit_code}) ===")
     sys.exit(exit_code)
 
 

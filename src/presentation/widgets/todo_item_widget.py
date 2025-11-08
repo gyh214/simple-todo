@@ -44,6 +44,9 @@ class TodoItemWidget(QWidget, DraggableMixin):
     subtask_edit_requested = pyqtSignal(object, object)
     subtask_delete_requested = pyqtSignal(object, object)
 
+    # 펼침 상태 변경 시그널 (Phase 1)
+    expanded_changed = pyqtSignal(str, bool)  # (todo_id, is_expanded)
+
     def __init__(self, todo: Todo, parent=None):
         """TodoItemWidget 초기화
 
@@ -239,6 +242,9 @@ class TodoItemWidget(QWidget, DraggableMixin):
             self.expand_btn.setText("▼")
         else:
             self.expand_btn.setText("▶")
+
+        # 펼침 상태 변경 시그널 발생 (Phase 1)
+        self.expanded_changed.emit(str(self.todo.id), self._subtasks_expanded)
 
     def _on_subtask_toggled(self, parent_id, subtask_id) -> None:
         """하위 할일 체크박스 토글 시그널 전파"""
@@ -496,6 +502,19 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.style().polish(self)
         self.update()
 
+    def set_expanded(self, expanded: bool) -> None:
+        """외부에서 펼침 상태 설정 (reload 후 복원용)
+
+        Args:
+            expanded: 펼침 상태 (True: 펼침, False: 접힘)
+        """
+        if len(self.todo.subtasks) == 0:
+            return
+
+        self._subtasks_expanded = expanded
+        self.subtasks_container.setVisible(expanded)
+        self.expand_btn.setText("▼" if expanded else "▶")
+
     def get_drag_data(self) -> str:
         """드래그할 데이터 반환 (DraggableMixin 요구 메서드)
 
@@ -518,6 +537,9 @@ class TodoItemWidget(QWidget, DraggableMixin):
         Args:
             todo: 새로운 Todo Entity
         """
+        # 기존 펼침 상태 저장 (P3-3: 하위 할일 펼침 상태 유지)
+        was_expanded = self._subtasks_expanded
+
         self.todo = todo
 
         # UI 업데이트
@@ -557,10 +579,22 @@ class TodoItemWidget(QWidget, DraggableMixin):
         # 하위 할일 업데이트
         self._populate_subtasks()
 
-        # 펼치기 버튼 표시 여부 업데이트
+        # 펼치기 버튼 표시 여부 및 펼침 상태 복원 (P3-3)
         if len(self.todo.subtasks) > 0:
             self.expand_btn.setVisible(True)
+
+            # 펼침 상태 복원: 이전에 펼쳐져 있었다면 계속 펼친 상태 유지
+            if was_expanded:
+                self._subtasks_expanded = True
+                self.subtasks_container.setVisible(True)
+                self.expand_btn.setText("▼")
+            # 접혀 있었다면 접힌 상태 유지
+            else:
+                self._subtasks_expanded = False
+                self.subtasks_container.setVisible(False)
+                self.expand_btn.setText("▶")
         else:
+            # 하위 할일이 모두 삭제된 경우: 펼치기 버튼 숨김 및 컨테이너 숨김
             self.expand_btn.setVisible(False)
             self._subtasks_expanded = False
             self.subtasks_container.setVisible(False)

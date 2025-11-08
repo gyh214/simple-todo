@@ -45,6 +45,9 @@ class SectionWidget(QWidget):
     subtask_edit_requested = pyqtSignal(object, object)
     subtask_delete_requested = pyqtSignal(object, object)
 
+    # 펼침 상태 변경 시그널 (Phase 1)
+    todo_expanded_changed = pyqtSignal(str, bool)  # (todo_id, is_expanded)
+
     def __init__(self, title: str, parent=None):
         """SectionWidget 초기화
 
@@ -55,6 +58,8 @@ class SectionWidget(QWidget):
         super().__init__(parent)
         self.title = title
         self.todo_items: List[TodoItemWidget] = []
+        # Phase 1: todo_widgets 딕셔너리 추가 (todo_id → widget 매핑)
+        self.todo_widgets: dict[str, TodoItemWidget] = {}
 
         self.setup_ui()
         self.apply_styles()
@@ -139,9 +144,14 @@ class SectionWidget(QWidget):
         todo_item.subtask_edit_requested.connect(self.subtask_edit_requested.emit)
         todo_item.subtask_delete_requested.connect(self.subtask_delete_requested.emit)
 
+        # 펼침 상태 시그널 연결 (Phase 1)
+        todo_item.expanded_changed.connect(self.todo_expanded_changed.emit)
+
         # 레이아웃에 추가 (stretch 위에)
         self.items_layout.insertWidget(len(self.todo_items), todo_item)
         self.todo_items.append(todo_item)
+        # Phase 1: todo_widgets 딕셔너리에 추가
+        self.todo_widgets[str(todo.id)] = todo_item
 
         # 카운트 업데이트
         self.update_count()
@@ -160,6 +170,8 @@ class SectionWidget(QWidget):
 
                 # 리스트에서 제거
                 self.todo_items.pop(i)
+                # Phase 1: todo_widgets 딕셔너리에서 제거
+                self.todo_widgets.pop(todo_id, None)
 
                 # 카운트 업데이트
                 self.update_count()
@@ -177,6 +189,8 @@ class SectionWidget(QWidget):
             todo_item.deleteLater()
 
         self.todo_items.clear()
+        # Phase 1: todo_widgets 딕셔너리도 초기화
+        self.todo_widgets.clear()
         self.update_count()
 
     def get_todos(self) -> List[Todo]:

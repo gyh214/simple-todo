@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Todo Entity - 도메인 핵심 엔티티"""
 
-from dataclasses import dataclass, replace, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List
 
@@ -9,11 +9,12 @@ from ..value_objects.todo_id import TodoId
 from ..value_objects.content import Content
 from ..value_objects.due_date import DueDate
 from ..value_objects.recurrence_rule import RecurrenceRule
+from .base_task import BaseTask
 from .subtask import SubTask
 
 
 @dataclass
-class Todo:
+class Todo(BaseTask):
     """Todo 엔티티
 
     할일 항목의 핵심 비즈니스 로직을 캡슐화합니다.
@@ -21,63 +22,8 @@ class Todo:
     반복 규칙(RecurrenceRule)을 통해 반복 할일을 생성할 수 있습니다.
     """
 
-    id: TodoId
-    content: Content
-    completed: bool
-    created_at: datetime
-    due_date: Optional[DueDate]
-    order: int
     subtasks: List[SubTask] = field(default_factory=list)
     recurrence: Optional[RecurrenceRule] = None
-
-    def __post_init__(self) -> None:
-        """인스턴스 생성 후 검증을 수행합니다.
-
-        Raises:
-            ValueError: 유효하지 않은 값이 있는 경우
-        """
-        if self.order < 0:
-            raise ValueError(f"Order must be non-negative, got {self.order}")
-
-    def complete(self) -> None:
-        """TODO를 완료 상태로 변경합니다."""
-        self.completed = True
-
-    def uncomplete(self) -> None:
-        """TODO를 미완료 상태로 변경합니다."""
-        self.completed = False
-
-    def update_content(self, content: Content) -> None:
-        """TODO 내용을 수정합니다.
-
-        Args:
-            content: 새로운 내용 (Content Value Object)
-
-        Raises:
-            ValueError: 유효하지 않은 내용인 경우 (Content에서 검증)
-        """
-        self.content = content
-
-    def set_due_date(self, due_date: Optional[DueDate]) -> None:
-        """납기일을 설정합니다.
-
-        Args:
-            due_date: 새로운 납기일 (None일 경우 납기일 제거)
-        """
-        self.due_date = due_date
-
-    def change_order(self, new_order: int) -> None:
-        """순서를 변경합니다.
-
-        Args:
-            new_order: 새로운 순서 (0 이상)
-
-        Raises:
-            ValueError: 순서가 음수인 경우
-        """
-        if new_order < 0:
-            raise ValueError(f"Order must be non-negative, got {new_order}")
-        self.order = new_order
 
     def set_recurrence(self, recurrence_rule: Optional[RecurrenceRule]) -> None:
         """반복 규칙을 설정합니다.

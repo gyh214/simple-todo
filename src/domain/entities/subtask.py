@@ -8,75 +8,17 @@ from typing import Optional
 from ..value_objects.todo_id import TodoId
 from ..value_objects.content import Content
 from ..value_objects.due_date import DueDate
+from .base_task import BaseTask
 
 
 @dataclass
-class SubTask:
+class SubTask(BaseTask):
     """SubTask 엔티티
 
     메인 할일(Todo)과 동일한 필드 구조를 가지지만,
     자체적으로 하위 할일을 가질 수 없음 (1-depth만 지원).
+    BaseTask의 모든 공통 메서드를 상속받습니다.
     """
-
-    id: TodoId
-    content: Content
-    completed: bool
-    created_at: datetime
-    due_date: Optional[DueDate]
-    order: int
-
-    def __post_init__(self) -> None:
-        """인스턴스 생성 후 검증을 수행합니다.
-
-        Raises:
-            ValueError: 유효하지 않은 값이 있는 경우
-        """
-        if self.order < 0:
-            raise ValueError(f"Order must be non-negative, got {self.order}")
-
-    def complete(self) -> None:
-        """SubTask를 완료 상태로 변경합니다."""
-        self.completed = True
-
-    def uncomplete(self) -> None:
-        """SubTask를 미완료 상태로 변경합니다."""
-        self.completed = False
-
-    def toggle_complete(self) -> None:
-        """완료 상태를 토글합니다."""
-        self.completed = not self.completed
-
-    def update_content(self, content: Content) -> None:
-        """SubTask 내용을 수정합니다.
-
-        Args:
-            content: 새로운 내용 (Content Value Object)
-
-        Raises:
-            ValueError: 유효하지 않은 내용인 경우 (Content에서 검증)
-        """
-        self.content = content
-
-    def set_due_date(self, due_date: Optional[DueDate]) -> None:
-        """납기일을 설정합니다.
-
-        Args:
-            due_date: 새로운 납기일 (None일 경우 납기일 제거)
-        """
-        self.due_date = due_date
-
-    def change_order(self, new_order: int) -> None:
-        """순서를 변경합니다.
-
-        Args:
-            new_order: 새로운 순서 (0 이상)
-
-        Raises:
-            ValueError: 순서가 음수인 경우
-        """
-        if new_order < 0:
-            raise ValueError(f"Order must be non-negative, got {new_order}")
-        self.order = new_order
 
     @staticmethod
     def create(

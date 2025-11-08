@@ -151,7 +151,7 @@ WIDGET_SIZES = {
     'delete_btn_size': (24, 24),
     'splitter_handle_width': 12,
     'footer_min_height': 28,
-    'edit_dialog_size': (450, 750),
+    'edit_dialog_size': (450, 800),  # 스크롤 가능하도록 800으로 설정
     'content_edit_height_min': 120,
     'content_edit_height_max': 150,
     'backup_dialog_size': (520, 680),

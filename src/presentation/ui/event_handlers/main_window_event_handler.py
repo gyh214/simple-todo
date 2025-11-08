@@ -12,7 +12,7 @@ MainWindow의 모든 이벤트 처리 로직을 담당합니다.
 - 하위 할일 CRUD
 - 반복 할일 처리
 """
-from typing import Optional, List
+from typing import Optional, List, Set
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QDialog, QMessageBox
 import logging
@@ -78,6 +78,9 @@ class MainWindowEventHandler:
             callback=self._execute_split_ratio_save
         )
 
+        # Phase 1: 펼침 상태 저장소 (전역)
+        self._expanded_todos: Set[str] = set()
+
     def connect_signals(self) -> None:
         """시그널과 슬롯 연결"""
         # 헤더: 할일 추가 (추가 버튼만 사용)
@@ -111,6 +114,10 @@ class MainWindowEventHandler:
 
         # Splitter 이동
         self.splitter.splitterMoved.connect(self.on_splitter_moved)
+
+        # Phase 1: 펼침 상태 저장 시그널 연결
+        self.in_progress_section.todo_expanded_changed.connect(self._on_todo_expanded_changed)
+        self.completed_section.todo_expanded_changed.connect(self._on_todo_expanded_changed)
 
         # Footer: 관리 버튼 연결
         self.footer_widget.manage_clicked.connect(self._on_manage_clicked)
@@ -211,6 +218,9 @@ class MainWindowEventHandler:
         in_progress_count = len(self.in_progress_section.todo_items)
         completed_count = len(self.completed_section.todo_items)
         self.footer_widget.update_counts(in_progress_count, completed_count)
+
+        # Phase 1: 펼침 상태 복원
+        self._restore_expanded_states()
 
     def _refresh_ui_without_sorting(self) -> None:
         """현재 order대로 UI 갱신 (정렬 없음 - 드래그 앤 드롭용)
@@ -426,9 +436,9 @@ class MainWindowEventHandler:
                             due_date=subtask.due_date
                         )
 
-                # 반복 규칙 설정
+                # 반복 규칙 설정 (P1-1 수정: new_todo.id.value → str(new_todo.id))
                 if recurrence:
-                    self.todo_service.set_recurrence(new_todo.id.value, recurrence)
+                    self.todo_service.set_recurrence(str(new_todo.id), recurrence)
 
 
                 logger.info(
@@ -680,29 +690,50 @@ class MainWindowEventHandler:
             logger.error(f"Failed to edit subtask: {e}", exc_info=True)
 
     def on_subtask_delete(self, parent_id, subtask_id) -> None:
-        """하위 할일 삭제 핸들러
+        """하위 할일 삭제 핸들러 (즉시 삭제, 확인 없음)
 
         Args:
             parent_id: 메인 할일 ID (TodoId 객체)
             subtask_id: 하위 할일 ID (TodoId 객체)
         """
         try:
-            # 확인 다이얼로그 (선택적)
-            reply = QMessageBox.question(
-                self.main_window,
-                "하위 할일 삭제",
-                "이 하위 할일을 삭제하시겠습니까?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
+            # 즉시 삭제
+            self.todo_service.delete_subtask(parent_id, subtask_id)
+            logger.info(f"Subtask deleted: parent={parent_id.value}, subtask={subtask_id.value}")
 
-            if reply == QMessageBox.StandardButton.Yes:
-                # TodoService를 통해 삭제
-                self.todo_service.delete_subtask(parent_id, subtask_id)
-                logger.info(f"Subtask deleted: parent={parent_id.value}, subtask={subtask_id.value}")
-
-                # UI 갱신
-                self.load_todos()
+            # UI 갱신
+            self.load_todos()
 
         except Exception as e:
             logger.error(f"Failed to delete subtask: {e}", exc_info=True)
+            QMessageBox.critical(
+                self.main_window,
+                "오류",
+                "하위 할일 삭제 중 오류가 발생했습니다.",
+                QMessageBox.StandardButton.Ok
+            )
+
+    # ========================================
+    # Phase 1: 펼침 상태 관리
+    # ========================================
+
+    def _on_todo_expanded_changed(self, todo_id: str, is_expanded: bool) -> None:
+        """TODO 펼침 상태 변경 처리
+
+        Args:
+            todo_id: TODO ID
+            is_expanded: 펼침 상태 (True: 펼침, False: 접힘)
+        """
+        if is_expanded:
+            self._expanded_todos.add(todo_id)
+        else:
+            self._expanded_todos.discard(todo_id)
+        logger.info(f"TODO 펼침 상태 변경: id={todo_id}, expanded={is_expanded}, total_expanded={len(self._expanded_todos)}")
+
+    def _restore_expanded_states(self) -> None:
+        """저장된 펼침 상태 복원"""
+        for section in [self.in_progress_section, self.completed_section]:
+            for todo_id, widget in section.todo_widgets.items():
+                if todo_id in self._expanded_todos:
+                    widget.set_expanded(True)
+                    logger.debug(f"TODO 펼침 상태 복원: id={todo_id}")

@@ -4,9 +4,12 @@
 from typing import List, Optional
 import logging
 from ...domain.entities.todo import Todo
+from ...domain.entities.subtask import SubTask
 from ...domain.value_objects.todo_id import TodoId
 from ...domain.value_objects.content import Content
 from ...domain.value_objects.due_date import DueDate
+from ...domain.value_objects.recurrence_rule import RecurrenceRule
+from ...domain.services.recurrence_service import RecurrenceService
 from ...domain.interfaces.repository_interface import ITodoRepository
 
 # 로깅 설정
@@ -119,6 +122,11 @@ class TodoService:
     def toggle_complete(self, todo_id: str) -> None:
         """완료 상태 토글
 
+        Notes:
+            - 완료(False→True) 시 반복 할일이면 다음 인스턴스 자동 생성
+            - 미완료(True→False) 시 아무 작업도 하지 않음
+            - 하위 할일 복사 옵션(copy_subtasks)이 True면 하위 할일도 복사
+
         Args:
             todo_id: TODO ID (문자열)
 
@@ -133,14 +141,72 @@ class TodoService:
         if todo is None:
             raise ValueError(f"TODO not found: {todo_id}")
 
+        # 완료 여부 확인 (토글 전)
+        was_incomplete = not todo.completed
+
         # 완료 상태 토글
         if todo.completed:
             todo.uncomplete()
         else:
             todo.complete()
 
-        # 저장
+        # 저장 (먼저 현재 TODO 저장)
         self.repository.save(todo)
+
+        # 반복 할일 처리 (미완료 → 완료일 때만)
+        if was_incomplete and todo.completed and todo.is_recurring():
+            # 다음 반복 날짜 계산
+            next_due_date = RecurrenceService.calculate_next_occurrence(
+                todo.due_date,
+                todo.recurrence
+            )
+
+            # 새 TODO 생성
+            next_order = self._calculate_next_order()
+            new_todo = Todo.create(
+                content=str(todo.content),
+                due_date=str(next_due_date),
+                order=next_order
+            )
+
+            # 반복 규칙 복사
+            new_todo.set_recurrence(todo.recurrence)
+
+            # 하위 할일 복사 (copy_subtasks가 True이고 하위 할일이 있을 때만)
+            if todo.recurrence.copy_subtasks and todo.subtasks:
+                # 메인 할일의 납기일 변경폭 계산 (상대적 조정용)
+                delta = None
+                if todo.due_date and next_due_date:
+                    delta = next_due_date.value - todo.due_date.value
+
+                for subtask in todo.subtasks:
+                    # 하위 할일 납기일 상대적 조정
+                    new_subtask_due_date = None
+                    if subtask.due_date and delta:
+                        # 납기일도 동일한 delta만큼 조정
+                        adjusted_datetime = subtask.due_date.value + delta
+                        new_subtask_due_date = DueDate(value=adjusted_datetime)
+
+                    # SubTask 복사 (새 ID, completed=False로 초기화)
+                    new_subtask = SubTask.create(
+                        content=str(subtask.content),
+                        due_date=str(new_subtask_due_date) if new_subtask_due_date else None,
+                        order=subtask.order  # 순서는 유지
+                    )
+                    new_todo = new_todo.add_subtask(new_subtask)
+
+                logger.info(
+                    f"Created next recurring instance with {len(todo.subtasks)} subtasks: "
+                    f"{new_todo.id.value} with due_date {next_due_date}"
+                )
+            else:
+                logger.info(
+                    f"Created next recurring instance: {new_todo.id.value} "
+                    f"with due_date {next_due_date}"
+                )
+
+            # 새 TODO 저장
+            self.repository.save(new_todo)
 
     def get_all_todos(self) -> List[Todo]:
         """전체 TODO 조회
@@ -221,3 +287,190 @@ class TodoService:
 
         logger.info(f"Restored {restored_count} TODOs from backup")
         return restored_count
+
+    # ========================================
+    # 반복 할일 관련 메서드
+    # ========================================
+
+    def set_recurrence(
+        self,
+        todo_id: str,
+        recurrence_rule: Optional[RecurrenceRule]
+    ) -> None:
+        """TODO에 반복 규칙 설정
+
+        Args:
+            todo_id: TODO ID (문자열)
+            recurrence_rule: 설정할 반복 규칙 (None이면 반복 제거)
+
+        Raises:
+            ValueError: todo_id에 해당하는 TODO를 찾을 수 없는 경우
+            ValueError: recurrence_rule이 있는데 due_date가 없는 경우
+
+        Notes:
+            - 반복 할일은 반드시 납기일이 있어야 함
+            - recurrence_rule이 None이면 반복 제거
+        """
+        # 1. ID 변환
+        todo_id_vo = TodoId.from_string(todo_id)
+
+        # 2. TODO 조회
+        todo = self.repository.find_by_id(todo_id_vo)
+        if todo is None:
+            raise ValueError(f"TODO not found: {todo_id}")
+
+        # 3. 반복 규칙이 있는데 납기일이 없으면 에러
+        if recurrence_rule and todo.due_date is None:
+            raise ValueError("Cannot set recurrence on TODO without due date")
+
+        # 4. 반복 규칙 설정
+        todo.set_recurrence(recurrence_rule)
+
+        # 5. 저장
+        self.repository.save(todo)
+
+    def remove_recurrence(self, todo_id: str) -> None:
+        """TODO의 반복 규칙 제거
+
+        Args:
+            todo_id: TODO ID (문자열)
+
+        Raises:
+            ValueError: todo_id에 해당하는 TODO를 찾을 수 없는 경우
+        """
+        # set_recurrence(todo_id, None)과 동일
+        self.set_recurrence(todo_id, None)
+
+    # ========================================
+    # SubTask CRUD 메서드
+    # ========================================
+
+    def add_subtask(
+        self,
+        parent_todo_id: TodoId,
+        content_str: str,
+        due_date: Optional[DueDate] = None
+    ) -> None:
+        """하위 할일 추가
+
+        Args:
+            parent_todo_id: 메인 할일 ID
+            content_str: 하위 할일 내용
+            due_date: 납기일 (optional)
+
+        Raises:
+            ValueError: parent_todo_id에 해당하는 Todo를 찾을 수 없는 경우
+        """
+        # 1. 메인 할일 조회
+        todo = self.repository.find_by_id(parent_todo_id)
+        if todo is None:
+            raise ValueError(f"Todo with id {parent_todo_id.value} not found")
+
+        # 2. SubTask 생성 (order는 자동 정렬되므로 0으로 설정)
+        due_date_str = str(due_date) if due_date else None
+        new_subtask = SubTask.create(
+            content=content_str,
+            due_date=due_date_str,
+            order=0
+        )
+
+        # 3. Todo에 추가 (자동 정렬됨)
+        todo.add_subtask(new_subtask)
+
+        # 4. 저장
+        self.repository.save(todo)
+
+    def update_subtask(
+        self,
+        parent_todo_id: TodoId,
+        subtask_id: TodoId,
+        content_str: Optional[str] = None,
+        due_date: Optional[DueDate] = None
+    ) -> None:
+        """하위 할일 수정
+
+        Args:
+            parent_todo_id: 메인 할일 ID
+            subtask_id: 하위 할일 ID
+            content_str: 새 내용 (None이면 변경 안함)
+            due_date: 새 납기일 (None이면 변경 안함)
+
+        Raises:
+            ValueError: Todo 또는 SubTask를 찾을 수 없는 경우
+        """
+        # 1. 메인 할일 조회
+        todo = self.repository.find_by_id(parent_todo_id)
+        if todo is None:
+            raise ValueError(f"Todo with id {parent_todo_id.value} not found")
+
+        # 2. 하위 할일 조회
+        subtask = todo.get_subtask(subtask_id)
+        if subtask is None:
+            raise ValueError(
+                f"SubTask with id {subtask_id.value} not found in todo {parent_todo_id.value}"
+            )
+
+        # 3. 내용 수정 (있는 경우)
+        if content_str is not None:
+            content_vo = Content(value=content_str)
+            subtask.update_content(content_vo)
+
+        # 4. 납기일 수정 (있는 경우)
+        if due_date is not None:
+            subtask.set_due_date(due_date)
+
+        # 5. Todo에 업데이트 (재정렬됨)
+        todo.update_subtask(subtask_id, subtask)
+
+        # 6. 저장
+        self.repository.save(todo)
+
+    def delete_subtask(
+        self,
+        parent_todo_id: TodoId,
+        subtask_id: TodoId
+    ) -> None:
+        """하위 할일 삭제
+
+        Args:
+            parent_todo_id: 메인 할일 ID
+            subtask_id: 하위 할일 ID
+
+        Raises:
+            ValueError: Todo를 찾을 수 없는 경우
+        """
+        # 1. 메인 할일 조회
+        todo = self.repository.find_by_id(parent_todo_id)
+        if todo is None:
+            raise ValueError(f"Todo with id {parent_todo_id.value} not found")
+
+        # 2. 하위 할일 제거
+        todo.remove_subtask(subtask_id)
+
+        # 3. 저장
+        self.repository.save(todo)
+
+    def toggle_subtask_complete(
+        self,
+        parent_todo_id: TodoId,
+        subtask_id: TodoId
+    ) -> None:
+        """하위 할일 완료 상태 토글
+
+        Args:
+            parent_todo_id: 메인 할일 ID
+            subtask_id: 하위 할일 ID
+
+        Raises:
+            ValueError: Todo를 찾을 수 없는 경우
+        """
+        # 1. 메인 할일 조회
+        todo = self.repository.find_by_id(parent_todo_id)
+        if todo is None:
+            raise ValueError(f"Todo with id {parent_todo_id.value} not found")
+
+        # 2. 완료 상태 토글
+        todo.toggle_subtask_complete(subtask_id)
+
+        # 3. 저장
+        self.repository.save(todo)

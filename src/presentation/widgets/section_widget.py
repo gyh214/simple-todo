@@ -28,6 +28,10 @@ class SectionWidget(QWidget):
         todo_deleted(str): TODO 삭제 요청 (todo_id)
         todo_check_toggled(str, bool): 체크박스 토글 (todo_id, completed)
         todo_edit_requested(str): TODO 편집 요청 (todo_id)
+        todo_reordered(str, int, str): TODO 순서 변경 (todo_id, new_position, section)
+        subtask_toggled(object, object): 하위 할일 완료 토글 (parent_id, subtask_id)
+        subtask_edit_requested(object, object): 하위 할일 편집 요청 (parent_id, subtask_id)
+        subtask_delete_requested(object, object): 하위 할일 삭제 요청 (parent_id, subtask_id)
     """
 
     # 시그널 정의
@@ -35,6 +39,11 @@ class SectionWidget(QWidget):
     todo_check_toggled = pyqtSignal(str, bool)
     todo_edit_requested = pyqtSignal(str)
     todo_reordered = pyqtSignal(str, int, str)  # (todo_id, new_position, section)
+
+    # 하위 할일 시그널
+    subtask_toggled = pyqtSignal(object, object)  # parent_id, subtask_id
+    subtask_edit_requested = pyqtSignal(object, object)
+    subtask_delete_requested = pyqtSignal(object, object)
 
     def __init__(self, title: str, parent=None):
         """SectionWidget 초기화
@@ -124,6 +133,11 @@ class SectionWidget(QWidget):
         todo_item.delete_requested.connect(self.todo_deleted.emit)
         todo_item.check_toggled.connect(self.todo_check_toggled.emit)
         todo_item.edit_requested.connect(self.todo_edit_requested.emit)
+
+        # 하위 할일 시그널 연결 (릴레이)
+        todo_item.subtask_toggled.connect(self.subtask_toggled.emit)
+        todo_item.subtask_edit_requested.connect(self.subtask_edit_requested.emit)
+        todo_item.subtask_delete_requested.connect(self.subtask_delete_requested.emit)
 
         # 레이아웃에 추가 (stretch 위에)
         self.items_layout.insertWidget(len(self.todo_items), todo_item)

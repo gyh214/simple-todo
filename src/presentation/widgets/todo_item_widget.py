@@ -14,6 +14,7 @@ from ...domain.entities.todo import Todo
 from ...domain.value_objects.due_date import DueDateStatus
 from .rich_text_widget import RichTextWidget
 from .mixins.draggable_mixin import DraggableMixin
+from .subtask_widget import SubTaskWidget
 
 
 class TodoItemWidget(QWidget, DraggableMixin):
@@ -38,6 +39,11 @@ class TodoItemWidget(QWidget, DraggableMixin):
     check_toggled = pyqtSignal(str, bool)
     edit_requested = pyqtSignal(str)
 
+    # 하위 할일 시그널
+    subtask_toggled = pyqtSignal(object, object)  # parent_id, subtask_id
+    subtask_edit_requested = pyqtSignal(object, object)
+    subtask_delete_requested = pyqtSignal(object, object)
+
     def __init__(self, todo: Todo, parent=None):
         """TodoItemWidget 초기화
 
@@ -48,6 +54,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         super().__init__(parent)
         self.todo = todo
         self._is_hovered = False
+        self._subtasks_expanded = False  # 하위 할일 펼침 상태
 
         # DraggableMixin 초기화
         self.setup_draggable()
@@ -58,8 +65,18 @@ class TodoItemWidget(QWidget, DraggableMixin):
 
     def setup_ui(self) -> None:
         """UI 요소 생성 및 배치"""
+        # 전체 레이아웃 (수직) - 메인 콘텐츠 + 하위 할일 컨테이너
+        container_layout = QVBoxLayout(self)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+
+        # === 메인 TODO 위젯 ===
+        main_widget = QWidget()
+        main_widget.setObjectName("todoItemMain")
+        main_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+
         # 메인 레이아웃 (수평)
-        main_layout = QHBoxLayout(self)
+        main_layout = QHBoxLayout(main_widget)
         main_layout.setContentsMargins(*config.LAYOUT_MARGINS['todo_item'])
         main_layout.setSpacing(config.LAYOUT_SPACING['todo_item_main'])
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)  # HTML align-items: flex-start
@@ -83,20 +100,45 @@ class TodoItemWidget(QWidget, DraggableMixin):
         content_layout.setSpacing(config.LAYOUT_SPACING['todo_item_content'])
         content_layout.setContentsMargins(0, 0, 0, 0)
 
+        # 첫 번째 행: TODO 텍스트 + 펼치기 버튼 + 날짜 배지
+        first_row_layout = QHBoxLayout()
+        first_row_layout.setSpacing(8)
+        first_row_layout.setContentsMargins(0, 0, 0, 0)
+
         # TODO 텍스트 (RichTextWidget 사용 - 링크/경로 인식)
         self.todo_text = RichTextWidget(str(self.todo.content))
         self.todo_text.setObjectName("todoText")
         if self.todo.completed:
             self.todo_text.setProperty("completed", "true")
-        content_layout.addWidget(self.todo_text)
+        first_row_layout.addWidget(self.todo_text, 1)  # stretch
+
+        # 펼치기/접기 버튼 (하위 할일이 있을 때만 표시)
+        self.expand_btn = QPushButton("▶")
+        self.expand_btn.setObjectName("expandBtn")
+        self.expand_btn.setFixedSize(config.WIDGET_SIZES['expand_btn_size'],
+                                      config.WIDGET_SIZES['expand_btn_size'])
+        self.expand_btn.clicked.connect(self._toggle_subtasks)
+        if len(self.todo.subtasks) == 0:
+            self.expand_btn.setVisible(False)
+        first_row_layout.addWidget(self.expand_btn)
+
+        # 반복 아이콘 (반복 할일일 때만 표시)
+        if self.todo.recurrence:
+            self.recurrence_icon = QLabel("🔁")
+            self.recurrence_icon.setObjectName("recurrenceIcon")
+            self.recurrence_icon.setToolTip(f"반복: {self.todo.recurrence}")
+            first_row_layout.addWidget(self.recurrence_icon)
+        else:
+            self.recurrence_icon = None
 
         # TODO 메타 정보 (납기일 배지)
         if self.todo.due_date:
             self.date_badge = self._create_date_badge()
-            content_layout.addWidget(self.date_badge)
+            first_row_layout.addWidget(self.date_badge)
         else:
             self.date_badge = None
 
+        content_layout.addLayout(first_row_layout)
         main_layout.addLayout(content_layout, 1)  # stretch factor = 1
 
         # 4. 삭제 버튼 (레이아웃에 포함)
@@ -117,6 +159,25 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # QSS 배경 렌더링 강제 (setAutoFillBackground 대신 사용)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+
+        # 메인 위젯을 컨테이너에 추가
+        container_layout.addWidget(main_widget)
+
+        # === 하위 할일 컨테이너 ===
+        self.subtasks_container = QWidget()
+        self.subtasks_container.setObjectName("subtasksContainer")
+        self.subtasks_layout = QVBoxLayout(self.subtasks_container)
+        self.subtasks_layout.setContentsMargins(0, 0, 0, 0)
+        self.subtasks_layout.setSpacing(2)
+
+        # 하위 할일 위젯 생성
+        self._populate_subtasks()
+
+        # 초기 상태: 접힌 상태
+        self.subtasks_container.setVisible(False)
+
+        # 하위 할일 컨테이너를 전체 레이아웃에 추가
+        container_layout.addWidget(self.subtasks_container)
 
     def _create_date_badge(self) -> QLabel:
         """납기일 배지 생성
@@ -151,6 +212,46 @@ class TodoItemWidget(QWidget, DraggableMixin):
         return (text, status)
 
 
+    def _populate_subtasks(self) -> None:
+        """하위 할일 위젯들을 생성하여 컨테이너에 추가"""
+        # 기존 위젯들 모두 제거
+        while self.subtasks_layout.count():
+            item = self.subtasks_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # 새로운 하위 할일 위젯 생성
+        for subtask in self.todo.subtasks:
+            subtask_widget = SubTaskWidget(self.todo.id, subtask)
+            # 시그널 연결
+            subtask_widget.subtask_toggled.connect(self._on_subtask_toggled)
+            subtask_widget.subtask_edit_requested.connect(self._on_subtask_edit_requested)
+            subtask_widget.subtask_delete_requested.connect(self._on_subtask_delete_requested)
+            self.subtasks_layout.addWidget(subtask_widget)
+
+    def _toggle_subtasks(self) -> None:
+        """하위 할일 컨테이너 펼치기/접기"""
+        self._subtasks_expanded = not self._subtasks_expanded
+        self.subtasks_container.setVisible(self._subtasks_expanded)
+
+        # 버튼 아이콘 변경
+        if self._subtasks_expanded:
+            self.expand_btn.setText("▼")
+        else:
+            self.expand_btn.setText("▶")
+
+    def _on_subtask_toggled(self, parent_id, subtask_id) -> None:
+        """하위 할일 체크박스 토글 시그널 전파"""
+        self.subtask_toggled.emit(parent_id, subtask_id)
+
+    def _on_subtask_edit_requested(self, parent_id, subtask_id) -> None:
+        """하위 할일 편집 요청 시그널 전파"""
+        self.subtask_edit_requested.emit(parent_id, subtask_id)
+
+    def _on_subtask_delete_requested(self, parent_id, subtask_id) -> None:
+        """하위 할일 삭제 요청 시그널 전파"""
+        self.subtask_delete_requested.emit(parent_id, subtask_id)
+
     def apply_styles(self) -> None:
         """QSS 스타일 적용 (프로토타입 정확히 재현)"""
 
@@ -165,14 +266,24 @@ class TodoItemWidget(QWidget, DraggableMixin):
 
         style_sheet = f"""
         QWidget#todoItem {{
+            background: transparent;
+            border: none;
+        }}
+
+        QWidget#todoItemMain {{
             background: {bg_color};
             border: {config.UI_METRICS['border_width']['thin']}px solid {border_color};
             border-radius: {config.UI_METRICS['border_radius']['lg']}px;
         }}
 
-        QWidget#todoItem:hover {{
+        QWidget#todoItemMain:hover {{
             background: {config.COLORS['card_hover']};
             border-color: {config.COLORS['accent']};
+        }}
+
+        QWidget#subtasksContainer {{
+            background: transparent;
+            border: none;
         }}
 
         QLabel#dragHandle {{
@@ -225,6 +336,24 @@ class TodoItemWidget(QWidget, DraggableMixin):
         QPushButton#deleteBtn:hover {{
             background: rgba(244, 67, 54, 0.15);
             color: #ef5350;
+        }}
+
+        QPushButton#expandBtn {{
+            background: transparent;
+            border: none;
+            color: {config.COLORS['text_secondary']};
+            font-size: {config.FONT_SIZES['sm']}px;
+            padding: 0px;
+        }}
+
+        QPushButton#expandBtn:hover {{
+            color: {config.COLORS['accent']};
+        }}
+
+        QLabel#recurrenceIcon {{
+            color: {config.COLORS['accent']};
+            font-size: {config.FONT_SIZES['base']}px;
+            padding: 0px 2px;
         }}
 
         QLabel#dateBadge {{
@@ -395,6 +524,21 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.todo_text.update_text(str(self.todo.content))
         self.checkbox.setChecked(self.todo.completed)
 
+        # 반복 아이콘 업데이트
+        if self.todo.recurrence:
+            if not self.recurrence_icon:
+                # 반복 아이콘이 없었는데 추가된 경우
+                self.recurrence_icon = QLabel("🔁")
+                self.recurrence_icon.setObjectName("recurrenceIcon")
+                # 첫 번째 행 레이아웃에서 펼치기 버튼 앞에 추가
+                # (레이아웃 재구성이 복잡하므로 툴팁만 업데이트)
+            self.recurrence_icon.setToolTip(f"반복: {self.todo.recurrence}")
+            self.recurrence_icon.setVisible(True)
+        else:
+            if self.recurrence_icon:
+                # 반복 아이콘이 있었는데 제거된 경우
+                self.recurrence_icon.setVisible(False)
+
         # 날짜 배지 업데이트
         if self.todo.due_date:
             if self.date_badge:
@@ -409,5 +553,16 @@ class TodoItemWidget(QWidget, DraggableMixin):
             if self.date_badge:
                 # 날짜 배지가 있었는데 제거된 경우
                 self.date_badge.setVisible(False)
+
+        # 하위 할일 업데이트
+        self._populate_subtasks()
+
+        # 펼치기 버튼 표시 여부 업데이트
+        if len(self.todo.subtasks) > 0:
+            self.expand_btn.setVisible(True)
+        else:
+            self.expand_btn.setVisible(False)
+            self._subtasks_expanded = False
+            self.subtasks_container.setVisible(False)
 
         self.apply_styles()

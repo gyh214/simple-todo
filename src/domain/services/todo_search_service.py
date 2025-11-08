@@ -3,6 +3,7 @@
 
 from typing import List
 from ..entities.todo import Todo
+from ..entities.subtask import SubTask
 
 
 class TodoSearchService:
@@ -10,7 +11,7 @@ class TodoSearchService:
 
     @staticmethod
     def search_todos(query: str, todos: List[Todo]) -> List[Todo]:
-        """내용 기준 검색 (대소문자 무시)
+        """내용 기준 검색 (대소문자 무시, 메인 할일 + 하위 할일 모두 검색)
 
         Args:
             query: 검색어
@@ -18,12 +19,39 @@ class TodoSearchService:
 
         Returns:
             List[Todo]: 검색 결과 (query가 비어있으면 전체 반환)
+            - 메인 할일 content에 query가 있는 경우
+            - 또는 하위 할일 중 하나라도 query가 있는 경우
         """
         if not query.strip():
             return todos
 
         query_lower = query.lower()
-        return [
-            todo for todo in todos
-            if query_lower in todo.content.value.lower()
-        ]
+
+        result = []
+        for todo in todos:
+            # 메인 할일 content에서 검색
+            if query_lower in todo.content.value.lower():
+                result.append(todo)
+                continue
+
+            # 하위 할일에서 검색
+            if TodoSearchService._search_in_subtasks(todo.subtasks, query_lower):
+                result.append(todo)
+
+        return result
+
+    @staticmethod
+    def _search_in_subtasks(subtasks: List[SubTask], query: str) -> bool:
+        """하위 할일에서 검색
+
+        Args:
+            subtasks: 검색 대상 SubTask 리스트
+            query: 검색 쿼리 (소문자로 변환된 상태)
+
+        Returns:
+            bool: 하나라도 매칭되면 True
+        """
+        for subtask in subtasks:
+            if query in subtask.content.value.lower():
+                return True
+        return False

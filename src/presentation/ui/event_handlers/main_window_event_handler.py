@@ -9,16 +9,23 @@ MainWindow의 모든 이벤트 처리 로직을 담당합니다.
 - Splitter 이동 (throttle)
 - 백업 관리 다이얼로그
 - 검색 (실시간)
+- 하위 할일 CRUD
+- 반복 할일 처리
 """
 from typing import Optional, List
 from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QDialog
+from PyQt6.QtWidgets import QDialog, QMessageBox
 import logging
 
 from src.domain.entities.todo import Todo
+from src.domain.value_objects.todo_id import TodoId
+from src.domain.value_objects.content import Content
+from src.domain.value_objects.due_date import DueDate
+from src.domain.value_objects.recurrence_rule import RecurrenceRule
 from src.domain.services.todo_search_service import TodoSearchService
 from src.infrastructure.utils.debounce_manager import DebounceManager
 from src.presentation.dialogs.backup_manager_dialog import BackupManagerDialog
+from src.presentation.dialogs.edit_dialog import SubTaskEditDialog
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +99,15 @@ class MainWindowEventHandler:
         self.completed_section.todo_check_toggled.connect(self.on_todo_check_toggled)
         self.completed_section.todo_edit_requested.connect(self.on_todo_edit)
         self.completed_section.todo_reordered.connect(self.on_todo_reorder)
+
+        # 섹션: 하위 할일 이벤트 (SectionWidget이 TodoItemWidget 시그널을 전파함)
+        self.in_progress_section.subtask_toggled.connect(self.on_subtask_toggled)
+        self.in_progress_section.subtask_edit_requested.connect(self.on_subtask_edit)
+        self.in_progress_section.subtask_delete_requested.connect(self.on_subtask_delete)
+
+        self.completed_section.subtask_toggled.connect(self.on_subtask_toggled)
+        self.completed_section.subtask_edit_requested.connect(self.on_subtask_edit)
+        self.completed_section.subtask_delete_requested.connect(self.on_subtask_delete)
 
         # Splitter 이동
         self.splitter.splitterMoved.connect(self.on_splitter_moved)
@@ -363,9 +379,15 @@ class MainWindowEventHandler:
                 # save_requested 시그널 연결
                 self.edit_dialog.save_requested.connect(self.on_edit_save)
 
-            # 3. 다이얼로그에 TODO 데이터 설정
+            # 3. 다이얼로그에 TODO 데이터 설정 (subtasks 포함)
             due_date_str = todo.due_date.value.isoformat() if todo.due_date else None
-            self.edit_dialog.set_todo(todo_id, str(todo.content), due_date_str)
+            self.edit_dialog.set_todo(
+                todo_id,
+                str(todo.content),
+                due_date_str,
+                todo.subtasks,
+                todo.recurrence  # 반복 규칙 전달
+            )
 
             # 4. 다이얼로그 표시 (모달)
             self.edit_dialog.exec()
@@ -385,24 +407,154 @@ class MainWindowEventHandler:
             # due_date가 빈 문자열이면 None으로 변환
             due_date_value = due_date if due_date else None
 
+            # 반복 규칙 가져오기
+            recurrence = self.edit_dialog.get_recurrence() if self.edit_dialog else None
+
             # todo_id가 빈 문자열이면 신규 추가
             if not todo_id:
                 # 신규 TODO 생성
                 new_todo = self.todo_service.create_todo(content, due_date_value)
-                logger.info(f"New todo created: {new_todo.id}, content: {content}, due_date: {due_date_value}")
+
+                # EditDialog에서 하위 할일 가져오기
+                if self.edit_dialog:
+                    subtasks = self.edit_dialog.get_subtasks()
+                    # 하위 할일 추가
+                    for subtask in subtasks:
+                        self.todo_service.add_subtask(
+                            parent_todo_id=new_todo.id,
+                            content_str=str(subtask.content),
+                            due_date=subtask.due_date
+                        )
+
+                # 반복 규칙 설정
+                if recurrence:
+                    self.todo_service.set_recurrence(new_todo.id.value, recurrence)
+
+
+                logger.info(
+                    f"New todo created: {new_todo.id}, content: {content}, "
+                    f"due_date: {due_date_value}, subtasks: {len(subtasks) if self.edit_dialog else 0}, "
+                    f"recurrence: {recurrence.frequency if recurrence else None}"
+                )
 
                 # UI 갱신 (정렬 순서 유지)
                 self.load_todos()
             else:
                 # 기존 TODO 수정
                 self.todo_service.update_todo(todo_id, content, due_date_value)
-                logger.info(f"Todo updated: {todo_id}")
+
+                # EditDialog에서 하위 할일 가져오기 및 동기화
+                if self.edit_dialog:
+                    new_subtasks = self.edit_dialog.get_subtasks()
+                    self._sync_subtasks(todo_id, new_subtasks)
+
+                # 반복 규칙 설정/제거
+                if recurrence:
+                    self.todo_service.set_recurrence(todo_id, recurrence)
+                else:
+                    self.todo_service.remove_recurrence(todo_id)
+
+
+                logger.info(
+                    f"Todo updated: {todo_id}, "
+                    f"recurrence: {recurrence.frequency if recurrence else 'removed'}"
+                )
 
                 # UI 갱신
                 self.load_todos()
 
+        except ValueError as e:
+            # ValueError는 사용자에게 경고로 표시
+            logger.warning(f"Validation error: {e}")
+            QMessageBox.warning(
+                self.main_window,
+                "경고",
+                str(e)
+            )
         except Exception as e:
             logger.error(f"Failed to save todo: {e}", exc_info=True)
+
+    def _sync_subtasks(self, todo_id: str, new_subtasks: List) -> None:
+        """EditDialog에서 반환된 subtasks를 Todo에 동기화
+
+        로직:
+        1. 기존 subtasks 조회
+        2. new_subtasks와 비교하여 변경사항 적용
+           - 새로 추가된 subtask → add_subtask()
+           - 수정된 subtask → update_subtask()
+           - 삭제된 subtask → delete_subtask()
+
+        Args:
+            todo_id: TODO ID (문자열)
+            new_subtasks: EditDialog에서 반환된 SubTask 리스트
+        """
+        try:
+            # 1. 기존 TODO 조회
+            todo_id_vo = TodoId.from_string(todo_id)
+            todo = self.repository.find_by_id(todo_id_vo)
+            if not todo:
+                logger.error(f"Todo not found for subtask sync: {todo_id}")
+                return
+
+            # 2. 기존 subtasks ID 세트
+            existing_ids = {st.id for st in todo.subtasks}
+            new_ids = {st.id for st in new_subtasks}
+
+            # 3. 삭제된 subtasks (기존에는 있지만 new_subtasks에 없는 것)
+            deleted_ids = existing_ids - new_ids
+            for subtask_id in deleted_ids:
+                self.todo_service.delete_subtask(todo_id_vo, subtask_id)
+                logger.debug(f"Subtask deleted: {subtask_id}")
+
+            # 4. 새로 추가된 subtasks (new_subtasks에만 있는 것)
+            added_ids = new_ids - existing_ids
+            for subtask in new_subtasks:
+                if subtask.id in added_ids:
+                    self.todo_service.add_subtask(
+                        parent_todo_id=todo_id_vo,
+                        content_str=str(subtask.content),
+                        due_date=subtask.due_date
+                    )
+                    logger.debug(f"Subtask added: {subtask.id}")
+
+            # 5. 기존 subtasks 중 변경된 것 (내용 또는 납기일 변경)
+            for new_subtask in new_subtasks:
+                if new_subtask.id in existing_ids:
+                    # 기존 subtask 찾기
+                    existing_subtask = next((st for st in todo.subtasks if st.id == new_subtask.id), None)
+                    if existing_subtask:
+                        # 변경 여부 확인
+                        content_changed = str(new_subtask.content) != str(existing_subtask.content)
+                        due_date_changed = (str(new_subtask.due_date) if new_subtask.due_date else None) != (str(existing_subtask.due_date) if existing_subtask.due_date else None)
+                        completed_changed = new_subtask.completed != existing_subtask.completed
+
+                        if content_changed or due_date_changed or completed_changed:
+                            # 내용 업데이트
+                            if content_changed:
+                                self.todo_service.update_subtask(
+                                    parent_todo_id=todo_id_vo,
+                                    subtask_id=new_subtask.id,
+                                    content_str=str(new_subtask.content),
+                                    due_date=None
+                                )
+                            # 납기일 업데이트
+                            if due_date_changed:
+                                self.todo_service.update_subtask(
+                                    parent_todo_id=todo_id_vo,
+                                    subtask_id=new_subtask.id,
+                                    content_str=None,
+                                    due_date=new_subtask.due_date
+                                )
+                            # 완료 상태 업데이트
+                            if completed_changed:
+                                self.todo_service.toggle_subtask_complete(todo_id_vo, new_subtask.id)
+
+                            logger.debug(f"Subtask updated: {new_subtask.id}")
+
+            logger.info(f"Subtasks synced for todo: {todo_id}, added: {len(added_ids)}, deleted: {len(deleted_ids)}")
+
+        except Exception as e:
+            logger.error(f"Failed to sync subtasks: {e}", exc_info=True)
 
     def on_todo_reorder(self, todo_id: str, new_position: int, section: str) -> None:
         """TODO 순서 변경 핸들러
@@ -458,3 +610,99 @@ class MainWindowEventHandler:
 
         except Exception as e:
             logger.error(f"Failed to open backup manager dialog: {e}", exc_info=True)
+
+    # ========================================
+    # 하위 할일 이벤트 핸들러
+    # ========================================
+
+    def on_subtask_toggled(self, parent_id, subtask_id) -> None:
+        """하위 할일 체크박스 토글 핸들러
+
+        Args:
+            parent_id: 메인 할일 ID (TodoId 객체)
+            subtask_id: 하위 할일 ID (TodoId 객체)
+        """
+        try:
+            # TodoService를 통해 완료 상태 토글
+            self.todo_service.toggle_subtask_complete(parent_id, subtask_id)
+            logger.info(f"Subtask toggled: parent={parent_id.value}, subtask={subtask_id.value}")
+
+            # UI 갱신
+            self.load_todos()
+
+        except Exception as e:
+            logger.error(f"Failed to toggle subtask: {e}", exc_info=True)
+
+    def on_subtask_edit(self, parent_id, subtask_id) -> None:
+        """하위 할일 편집 요청 핸들러
+
+        Args:
+            parent_id: 메인 할일 ID (TodoId 객체)
+            subtask_id: 하위 할일 ID (TodoId 객체)
+        """
+        try:
+            # 1. parent Todo 조회
+            todo = self.repository.find_by_id(parent_id)
+            if not todo:
+                logger.error(f"Parent todo not found: {parent_id.value}")
+                return
+
+            # 2. subtask 조회
+            subtask = todo.get_subtask(subtask_id)
+            if not subtask:
+                logger.error(f"Subtask not found: {subtask_id.value}")
+                return
+
+            # 3. SubTaskEditDialog 열기
+            dialog = SubTaskEditDialog(self.main_window)
+            due_date_str = subtask.due_date.value.isoformat() if subtask.due_date else None
+            dialog.set_data(str(subtask.content), due_date_str)
+
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                # 4. 저장 시 todo_service.update_subtask() 호출
+                content, due_date = dialog.get_data()
+
+                # DueDate 변환
+                due_date_vo = DueDate.from_string(due_date) if due_date else None
+
+                self.todo_service.update_subtask(
+                    parent_todo_id=parent_id,
+                    subtask_id=subtask_id,
+                    content_str=content,
+                    due_date=due_date_vo
+                )
+                logger.info(f"Subtask updated: parent={parent_id.value}, subtask={subtask_id.value}")
+
+                # 5. UI 새로고침
+                self.load_todos()
+
+        except Exception as e:
+            logger.error(f"Failed to edit subtask: {e}", exc_info=True)
+
+    def on_subtask_delete(self, parent_id, subtask_id) -> None:
+        """하위 할일 삭제 핸들러
+
+        Args:
+            parent_id: 메인 할일 ID (TodoId 객체)
+            subtask_id: 하위 할일 ID (TodoId 객체)
+        """
+        try:
+            # 확인 다이얼로그 (선택적)
+            reply = QMessageBox.question(
+                self.main_window,
+                "하위 할일 삭제",
+                "이 하위 할일을 삭제하시겠습니까?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                # TodoService를 통해 삭제
+                self.todo_service.delete_subtask(parent_id, subtask_id)
+                logger.info(f"Subtask deleted: parent={parent_id.value}, subtask={subtask_id.value}")
+
+                # UI 갱신
+                self.load_todos()
+
+        except Exception as e:
+            logger.error(f"Failed to delete subtask: {e}", exc_info=True)

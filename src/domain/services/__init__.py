@@ -4,6 +4,7 @@
 from .todo_sort_service import TodoSortService, SortOrder
 from .link_detection_service import LinkDetectionService, LinkType
 from .todo_search_service import TodoSearchService
+from .recurrence_service import RecurrenceService
 
 __all__ = [
     'TodoSortService',
@@ -11,4 +12,5 @@ __all__ = [
     'LinkDetectionService',
     'LinkType',
     'TodoSearchService',
+    'RecurrenceService',
 ]

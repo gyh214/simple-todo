@@ -107,6 +107,10 @@ SINGLE_INSTANCE_PORT = 65432
 URL_PATTERN = r'(https?://[^\s]+)|(www\.[^\s]+)'
 PATH_PATTERN = r'([A-Za-z]:\\[\\\w\s\-\.]+)|(\\\\[\w\-\.]+\\[\\\w\s\-\.]+)'
 
+# 반복 관련 아이콘/색상
+RECURRENCE_ICON = "🔁"  # 반복 아이콘
+RECURRENCE_ICON_COLOR = COLORS['accent']  # 반복 아이콘 색상
+
 # ============================================================================
 # UI 레이아웃 및 스타일 설정
 # ============================================================================
@@ -153,6 +157,8 @@ WIDGET_SIZES = {
     'backup_dialog_size': (520, 680),
     'manage_btn_size': (60, 24),
     'todo_text_line_height': 22,  # RichTextWidget 1줄 고정 높이 (base font 13px * 1.4 line-height + padding)
+    'expand_btn_size': 16,  # 펼치기/접기 버튼 크기
+    'subtask_indent': 24,  # 하위 할일 들여쓰기
 }
 
 # 폰트 크기 설정

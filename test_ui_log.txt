@@ -1,0 +1,28 @@
+=== UI 요소 확인 ===
+1. 종료일 체크박스 존재: True
+2. 종료일 선택 버튼 존재: True
+3. 요일 컨테이너 존재: True
+4. 요일 체크박스 개수: 7
+5. 하위 할일 복사 체크박스 존재: True
+
+=== 반복 규칙 설정 테스트 ===
+5.5. set_todo() 직후 요일 컨테이너 isVisible(): False
+5.6. set_todo() 직후 요일 컨테이너 isHidden(): False
+5.7. show() + processEvents() 후 요일 컨테이너 isVisible(): False
+5.8. show() + processEvents() 후 요일 컨테이너 isHidden(): False
+6. 반복 활성화 체크: True
+7. 빈도 선택값: weekly
+8. 종료일 체크: True
+9. 종료일 버튼 텍스트: 2025-12-07
+10. 요일 컨테이너 표시: False
+11. 선택된 요일: [0, 2, 4]
+12. 하위 할일 복사 체크: True
+
+=== get_recurrence() 테스트 ===
+13. 반환된 규칙 존재: True
+14. 빈도: weekly
+15. 종료일 존재: True
+16. 요일: frozenset({0, 2, 4})
+17. 하위 할일 복사: True
+
+=== 모든 테스트 완료 ===

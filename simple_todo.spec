@@ -53,6 +53,7 @@ a = Analysis(
         'psutil',
         'dateutil',
         'dateutil.parser',
+        'dateutil.relativedelta',
         'uuid',
         'json',
         'logging',
@@ -81,6 +82,7 @@ a = Analysis(
         'src.domain.entities',
         'src.domain.entities.__init__',
         'src.domain.entities.todo',
+        'src.domain.entities.subtask',
 
         # Domain - Interfaces
         'src.domain.interfaces',
@@ -93,6 +95,7 @@ a = Analysis(
         'src.domain.services.link_detection_service',
         'src.domain.services.todo_sort_service',
         'src.domain.services.todo_search_service',
+        'src.domain.services.recurrence_service',
 
         # Domain - Value Objects
         'src.domain.value_objects',
@@ -100,6 +103,7 @@ a = Analysis(
         'src.domain.value_objects.content',
         'src.domain.value_objects.due_date',
         'src.domain.value_objects.todo_id',
+        'src.domain.value_objects.recurrence_rule',
 
         # Application Layer
         'src.application',

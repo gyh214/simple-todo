@@ -2,7 +2,7 @@
 
 > 화면의 1/4 크기로 실행되는 심플하고 우아한 할일 관리 데스크톱 애플리케이션
 
-![Version](https://img.shields.io/badge/version-2.4-blue)
+![Version](https://img.shields.io/badge/version-2.5.1-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![Python](https://img.shields.io/badge/python-3.7+-green)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
@@ -41,6 +41,13 @@
 ---
 
 ## 🎉 최신 업데이트
+
+### v2.5.1 (2025-11-09) - 자동 업데이트 기능 추가 및 아키텍처 최적화
+
+#### ✨ 주요 개선사항
+- **자동 업데이트 기능**: GitHub Releases와 연동한 자동 업데이트 시스템
+- **MOAI-ADK 통합**: MoAI 프로젝트 문서화 표준 적용 (product.md, structure.md, tech.md)
+- **아키텍처 문서화**: CLEAN Architecture 설명서 완성
 
 ### v2.4 (2025-01-08) - 코드 품질 개선 및 UX 향상
 

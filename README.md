@@ -1,6 +1,6 @@
 # Simple ToDo
 
-> 화면의 1/4 크기로 실행되는 심플하고 우아한 할일 관리 데스크톱 애플리케이션
+> **화면의 1/4 크기로 실행되는 심플하고 우아한 할일 관리 데스크톱 애플리케이션**
 
 ![Version](https://img.shields.io/badge/version-2.5.1-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
@@ -10,328 +10,184 @@
 
 ---
 
-## 📋 목차
+## 📸 메인 화면
 
-- [소개](#-소개)
-- [최신 업데이트](#-최신-업데이트)
-- [주요 기능](#-주요-기능)
-- [설치 방법](#-설치-방법)
-- [사용 방법](#-사용-방법)
-- [개발 가이드](#-개발-가이드)
-- [기술 스택](#-기술-스택)
-- [프로젝트 구조](#-프로젝트-구조)
-- [라이선스](#-라이선스)
+<p align="center">
+  <img src="docs/images/screenshots/main-window.png" alt="Simple ToDo 메인 화면" width="400">
+</p>
 
 ---
 
-## 🎯 소개
+## ✨ 주요 특징
 
-**Simple ToDo**는 Windows 데스크톱 환경에서 작동하는 미니멀한 할일 관리 애플리케이션입니다.
-화면의 1/4 크기(420x600)로 실행되어 작업 중에도 부담 없이 할일을 관리할 수 있습니다.
+Simple ToDo는 **완벽함보다는 심플함**을 추구합니다. 복잡한 기능 없이 핵심만 담아 할일을 효율적으로 관리할 수 있습니다.
 
-### 특징
-- 🎨 **다크 모드 테마**: 눈의 피로를 줄이는 세련된 다크 UI
-- 📌 **항상 위**: 작업 중에도 항상 화면에 표시 가능
-- 🔄 **드래그 앤 드롭**: 직관적인 순서 변경
-- 📅 **납기일 관리**: 시각적 구분으로 우선순위 파악
-- 🔗 **링크/경로 인식**: URL과 파일 경로 자동 감지 및 실행
-- 💾 **자동 백업**: 모든 변경사항 즉시 저장 및 백업
-- 🖥️ **시스템 트레이**: 최소화 시 트레이로 이동
-
----
-
-## 🎉 최신 업데이트
-
-### v2.5.1 (2025-11-09) - 자동 업데이트 기능 추가 및 아키텍처 최적화
-
-#### ✨ 주요 개선사항
-- **자동 업데이트 기능**: GitHub Releases와 연동한 자동 업데이트 시스템
-- **MOAI-ADK 통합**: MoAI 프로젝트 문서화 표준 적용 (product.md, structure.md, tech.md)
-- **아키텍처 문서화**: CLEAN Architecture 설명서 완성
-
-### v2.4 (2025-01-08) - 코드 품질 개선 및 UX 향상
-
-#### 🔧 DRY 원칙 적용 (246줄 중복 코드 제거)
-- **BaseTask 추상 클래스 도입**: Todo와 SubTask의 중복 코드 114줄 제거
-- **DatePickerDialog 재사용 컴포넌트**: 중복 66줄 제거로 일관된 날짜 선택 경험 제공
-- **TodoService 헬퍼 메서드 통합**: 중복 16줄 개선
-
-#### ✅ UI/UX 버그 수정
-- **하위 할일 펼침 상태 유지**: 완료 처리나 삭제 후에도 펼친 하위 할일이 접히지 않도록 개선
-- **삭제 모달 제거**: 즉시 삭제 방식으로 변경하여 빠른 작업 흐름 지원
-- **EditDialog 스크롤 개선**: 하위 할일이 많아도 모든 UI 요소에 접근 가능
-
-#### 🏗️ 기술 개선
-- CLEAN Architecture 원칙 유지
-- PyQt6 시그널/슬롯 패턴 적극 활용
-- 로깅 강화 및 코드 재사용성 향상
+- 🎨 **다크 모드 테마** — 눈의 피로를 줄이는 세련된 UI
+- 📌 **항상 위** — 작업 중에도 화면에 고정 가능
+- 📝 **할일 생성** — 간단한 텍스트 입력으로 빠르게 추가
+- 🔄 **하위 할일** — 복잡한 작업을 단계별로 나누어 관리
+- 📅 **반복 할일** — 매일/매주/매달 자동으로 생성
+- 🔍 **검색 & 정렬** — 필요한 할일을 빠르게 찾고 정렬
+- 💾 **자동 백업** — 모든 변경사항 즉시 저장 및 안전한 백업
+- 🖥️ **시스템 통합** — 최소화 시 트레이로 이동
 
 ---
 
-## ✨ 주요 기능
+## 📸 기능 갤러리
 
-### 1. TODO 관리
-- **생성**: Enter 키 또는 추가 버튼으로 간편하게 생성
-- **수정**: 더블클릭으로 편집 다이얼로그 열기
-- **삭제**: 호버 시 나타나는 ✕ 버튼으로 즉시 삭제 (빠른 작업 흐름)
-- **완료 처리**: 체크박스로 진행중 ⟷ 완료 섹션 이동
-- **하위 할일**: 펼침 상태가 완료/삭제 후에도 유지되어 연속 작업 가능
+### 하위 할일로 복잡한 작업 관리
 
-### 2. 정렬 및 순서
-- **정렬**: 납기일 빠른순/늦은순 드롭다운
-- **드래그 앤 드롭**: ☰ 핸들로 순서 변경 (섹션 내부만 가능)
+<p align="center">
+  <img src="docs/images/screenshots/subtasks-expanded.png" alt="하위 할일 기능" width="400">
+</p>
 
-### 3. 섹션 관리
-- **진행중/완료 섹션**: 독립적 스크롤 영역
-- **분할바**: 드래그로 섹션 비율 조정 (최소 10% 제한)
-- **비율 저장**: 재시작 시 유지
-
-### 4. 납기일
-- **설정**: 편집 다이얼로그에서 캘린더 UI로 선택
-- **표시**: "X일 남음", "오늘", "X일 지남"
-- **시각적 구분**:
-  - 만료 (지난 날짜): 빨간색 배경
-  - 오늘: 주황색 배경
-  - 임박 (3일 이내): 연한 주황색 배경
-
-### 5. 링크 및 경로 인식
-- **웹 링크**: `http://`, `https://`, `www.`로 시작하는 URL 자동 감지
-- **파일 경로**: `C:\`, `D:\`, `\\server\` 등 자동 감지
-- **클릭 동작**: 브라우저/탐색기/연결 프로그램으로 열기
-
-### 6. 시스템 통합
-- **시스템 트레이**: 최소화 시 트레이로 이동
-- **단일 인스턴스**: 중복 실행 방지 (포트 65432 기반)
-- **항상 위**: 토글 기능으로 다른 창 위에 고정
+**큰 프로젝트를 작은 단계로 분할합니다.** 각 하위 할일의 진행 상태를 보면서 전체 진행률을 한눈에 파악할 수 있습니다.
 
 ---
 
-## 🚀 설치 방법
+### 직관적인 편집 화면
 
-### 실행 파일 사용 (권장)
+<p align="center">
+  <img src="docs/images/screenshots/edit-dialog.png" alt="편집 다이얼로그" width="400">
+</p>
 
-1. [Releases](../../releases) 페이지에서 최신 버전의 `SimpleTodo.exe` 다운로드
-2. 원하는 위치에 저장
-3. `SimpleTodo.exe` 실행
+**모든 기능이 한 화면에 있습니다.** 내용, 납기일, 하위 할일, 반복 설정을 한 곳에서 관리할 수 있습니다.
 
-### 소스 코드에서 실행
+---
 
-#### 1. 저장소 클론
+### 강력한 검색 & 정렬
+
+<p align="center">
+  <img src="docs/images/screenshots/search-filter.png" alt="검색 기능" width="400">
+</p>
+
+**필요한 할일을 즉시 찾습니다.** 실시간 검색과 다양한 정렬 옵션으로 할일을 효율적으로 관리합니다.
+
+---
+
+## 🚀 빠른 시작
+
+### Windows 사용자 (권장)
+
+1. [최신 릴리스](https://github.com/gyh214/simple-todo/releases/latest)에서 `SimpleTodo.exe` 다운로드
+2. 원하는 위치에 저장하고 실행
+3. 끝! 🎉
+
+### 개발자 (소스 코드 실행)
+
 ```bash
-git clone https://github.com/your-username/new-todo-panel.git
+# 1. 저장소 클론
+git clone https://github.com/gyh214/simple-todo.git
 cd new-todo-panel
-```
 
-#### 2. 가상환경 생성 및 활성화
-```bash
+# 2. 가상환경 설정
 python -m venv venv
 venv\Scripts\activate
-```
 
-#### 3. 의존성 설치
-```bash
+# 3. 의존성 설치
 pip install -r requirements.txt
-```
 
-#### 4. 실행
-```bash
+# 4. 실행
 python main.py
 ```
 
----
-
-## 📖 사용 방법
-
-### 기본 사용법
-
-1. **TODO 추가**: 상단 입력창에 할일을 입력하고 Enter 키 또는 추가 버튼 클릭
-2. **완료 처리**: TODO 왼쪽의 체크박스 클릭
-3. **수정**: TODO를 더블클릭하여 편집 다이얼로그 열기
-4. **삭제**: TODO에 마우스를 올려 나타나는 ✕ 버튼 클릭 (즉시 삭제)
-5. **순서 변경**: ☰ 핸들을 드래그하여 위아래로 이동
-6. **하위 할일**: 편집 다이얼로그에서 추가/관리, 펼침 상태는 자동 유지
-
-### 납기일 설정
-
-1. TODO 더블클릭 → 편집 다이얼로그 열기
-2. 캘린더에서 날짜 선택
-3. "완료" 버튼 클릭
-
-### 정렬 변경
-
-- 상단 드롭다운에서 "납기일 빠른순" 또는 "납기일 늦은순" 선택
-
-### 섹션 비율 조정
-
-- 진행중/완료 섹션 사이의 분할바를 드래그하여 비율 조정
-
-### 키보드 단축키
-
-- **Enter**: 입력창에서 TODO 추가
-- **Esc**: 다이얼로그 닫기
-- **Ctrl+N**: 새 TODO 추가 (입력창 포커스)
-- **Delete**: 선택된 TODO 삭제
-- **F2**: 선택된 TODO 편집
+더 자세한 설치 방법은 [설치 가이드](docs/USER_GUIDE.md#설치-및-실행)를 참고하세요.
 
 ---
 
-## 🛠️ 개발 가이드
+## 💡 주요 기능 상세
 
-### 개발 환경 설정
+### 📝 할일 관리
 
-#### 필수 요구사항
-- Python 3.7 이상
-- Windows 10 이상
+- **간단한 생성**: 텍스트를 입력하고 Enter 키만 누르면 추가됨
+- **빠른 완료**: 체크박스를 클릭하여 완료 상태 변경
+- **즉시 삭제**: ✕ 버튼으로 불필요한 할일 제거
+- **납기일 시각화**: 색상으로 우선순위 구분 (빨강=만료, 주황=오늘, 파랑=여유)
 
-#### 개발 모드 실행
-```bash
-# 가상환경 활성화
-venv\Scripts\activate
+### 🎯 하위 할일
 
-# 개발 모드 실행
-python main.py
+- **작업 분할**: 복잡한 할일을 여러 단계로 나눔
+- **진행률 표시**: "2/5" 형식으로 현재 진행 상황 파악
+- **펼침 상태 유지**: 완료/삭제 후에도 펼친 상태 자동 유지
 
-# 디버그 모드 실행 (상세 로그)
-python debug_main.py
-```
+### 🔄 반복 할일
 
-### 빌드
+- **자동 생성**: 매일/매주/매달 반복되는 할일 자동 생성
+- **편리한 설정**: 편집 화면에서 반복 주기만 선택
+- **유연한 관리**: 반복 일정 변경 또는 취소 가능
 
-#### 실행 파일 빌드
-```bash
-# 기본 빌드
-python build.py
+### 🔍 검색 & 정렬
 
-# 디버그 빌드 (상세 출력)
-python build.py --debug
-
-# 빌드 + 임시 파일 유지 (디버깅용)
-python build.py --keep-temp
-```
-
-빌드 결과물은 `dist/SimpleTodo.exe`에 생성됩니다.
-
-### 프로젝트 구조
-
-```
-new-todo-panel/
-├── src/                    # 소스 코드 (CLEAN Architecture)
-│   ├── domain/            # 도메인 레이어
-│   ├── application/       # 애플리케이션 레이어
-│   ├── infrastructure/    # 인프라 레이어
-│   ├── presentation/      # 프레젠테이션 레이어
-│   └── core/              # DI Container
-├── docs/                   # 문서
-├── main.py                 # 애플리케이션 진입점
-├── config.py               # 전역 설정
-├── build.py                # 빌드 스크립트
-└── requirements.txt        # Python 패키지 의존성
-```
-
-자세한 아키텍처 및 개발 가이드는 [CLAUDE.md](CLAUDE.md)를 참고하세요.
+- **실시간 검색**: 입력 중 즉시 검색 결과 표시
+- **4가지 정렬**: 생성순, 납기일(빠름/늦음), 커스텀 순서
 
 ---
 
-## 🔧 기술 스택
+## 📚 도움말 & 가이드
 
-- **언어**: Python 3.7+
-- **GUI 프레임워크**: PyQt6
-- **아키텍처**: CLEAN Architecture
-- **빌드 도구**: PyInstaller
-- **의존성 관리**: pip, requirements.txt
-
-### 주요 라이브러리
-- **PyQt6**: GUI 프레임워크
-- **python-dateutil**: 날짜 처리 유틸리티
-- **PyInstaller**: 실행 파일 빌드
-- **psutil**: 시스템 유틸리티
+| 문서 | 설명 |
+|------|------|
+| 📖 [사용자 가이드](docs/USER_GUIDE.md) | 상세 사용법, 키보드 단축키, 문제 해결 |
+| 🛠️ [개발 가이드](CONTRIBUTING.md) | 개발 환경 설정, 코드 기여 방법 |
+| 📝 [변경 이력](CHANGELOG.md) | 버전별 업데이트 내용 |
+| 📧 [문의하기](../../issues) | 버그 리포트, 기능 제안 |
 
 ---
 
-## 📂 프로젝트 구조
+## 🛠️ 기술 정보
 
-### CLEAN Architecture 레이어
-
-```
-┌─────────────────────────────────────┐
-│      Presentation Layer              │  UI, Event Handlers, Managers
-│  - MainWindow, Widgets, Dialogs     │
-│  - TrayManager, WindowManager       │
-│  - SingleInstanceManager            │
-├─────────────────────────────────────┤
-│      Application Layer               │  Use Cases, Services
-│  - TodoService                      │
-│  - SortTodos, ReorderTodo           │
-│  - DataPreservationService          │
-├─────────────────────────────────────┤
-│      Domain Layer                    │  Entities, Value Objects
-│  - Todo Entity                      │
-│  - TodoId, Content, DueDate         │
-│  - TodoSortService                  │
-├─────────────────────────────────────┤
-│      Infrastructure Layer            │  External Dependencies
-│  - TodoRepositoryImpl               │
-│  - MigrationService                 │
-│  - DebounceManager                  │
-└─────────────────────────────────────┘
-```
-
-### 데이터 저장
-
-- **위치**: `TodoPanel_Data/data.json`
-- **백업**: `TodoPanel_Data/backups/` (최근 10개 유지)
-- **형식**: JSON
-- **자동 저장**: 모든 변경사항 즉시 저장
-- **레거시 마이그레이션**: 구형 포맷 자동 변환
+| 항목 | 내용 |
+|------|------|
+| **언어** | Python 3.7+ |
+| **GUI** | PyQt6 |
+| **아키텍처** | CLEAN Architecture |
+| **데이터** | JSON (자동 저장 + 백업) |
+| **플랫폼** | Windows 10+ |
 
 ---
 
-## 🎨 색상 테마
+## 📦 최신 업데이트
 
-Simple ToDo는 다크 모드를 기본으로 사용합니다.
+### v2.5.1 (2025-11-09) — 자동 업데이트 & 문서화 개선
 
-```css
-Primary Background:   #1A1A1A
-Secondary Background: #2A2A2A
-Card/Surface:         #2D2D2D
-Text Primary:         rgba(255, 255, 255, 0.92)
-Text Secondary:       #B0B0B0
-Accent Color:         #CC785C (Claude 주황색)
-Border/Divider:       rgba(64, 64, 64, 0.3)
-```
+✨ **개선사항**:
+- GitHub Releases 연동 자동 업데이트 기능 추가
+- MOAI-ADK 문서화 표준 적용
+
+👉 [전체 변경 이력](CHANGELOG.md)
+
+---
+
+## 🤝 기여하기
+
+버그 리포트, 기능 제안, Pull Request는 언제나 환영합니다!
+
+자세한 내용은 [기여 가이드](CONTRIBUTING.md)를 참고하세요.
+
+**빠른 시작**:
+1. [Issues](../../issues)에서 기존 이슈 확인 또는 새 이슈 생성
+2. Fork하여 Feature 브랜치 생성
+3. 코드 작성 및 테스트
+4. Pull Request 생성
 
 ---
 
 ## 📝 라이선스
 
-이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
+이 프로젝트는 [MIT 라이선스](LICENSE) 하에 배포됩니다.
 
 ---
 
-## 🤝 기여
+## 📧 문의 및 지원
 
-버그 리포트, 기능 제안, Pull Request는 언제나 환영합니다!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+- **버그 리포트**: [Issues 페이지](../../issues)
+- **기능 제안**: [Issues 페이지](../../issues)
+- **개발 문의**: [CONTRIBUTING.md](CONTRIBUTING.md) 참고
 
 ---
 
-## 📧 문의
-
-프로젝트에 대한 문의사항이 있으시면 이슈를 등록해주세요.
-
----
-
-## 📌 참고 문서
-
-- [CLAUDE.md](CLAUDE.md) - 개발자를 위한 상세 가이드
-- [기능 명세서](docs/초기기획/초기_Simple_ToDo_기능_명세서.md) - 전체 기능 상세 설명
-- [UI 프로토타입](docs/초기기획/초기_todo-app-ui.html) - 실제 레이아웃/색상 참고
-
----
-
-<p align="center">Made with ❤️ for productivity</p>
+<p align="center">
+  <strong>Made with ❤️ for productivity</strong>
+  <br>
+  <sub>간단함의 힘으로 더 많은 일을 해내세요.</sub>
+</p>

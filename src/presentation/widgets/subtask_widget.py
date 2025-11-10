@@ -76,12 +76,14 @@ class SubTaskWidget(QWidget):
         content_layout.setSpacing(8)
         content_layout.setContentsMargins(0, 0, 0, 0)
 
-        # SubTask 텍스트 (최대 너비 제한으로 메인 TodoItemWidget 초과 방지)
+        # SubTask 텍스트 (최소 너비만 설정하여 윈도우 크기에 따라 자동 확장)
         self.subtask_text = QLabel(str(self.subtask.content))
         self.subtask_text.setObjectName("subtaskText")
         self.subtask_text.setWordWrap(False)
-        # 메인 TODO 텍스트(220px) - 들여쓰기(24px) = 196px
-        self.subtask_text.setMaximumWidth(config.LAYOUT_SIZES['subtask_text_max_width'])
+        # 메인 TODO 텍스트 최소 너비(220px) - 들여쓰기(24px) = 196px
+        self.subtask_text.setMinimumWidth(
+            config.LAYOUT_SIZES['todo_text_base_max_width'] - config.WIDGET_SIZES['subtask_indent']
+        )
         if self.subtask.completed:
             self.subtask_text.setProperty("completed", "true")
         content_layout.addWidget(self.subtask_text, 1)  # stretch factor = 1

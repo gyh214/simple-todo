@@ -43,7 +43,7 @@ UPDATE_CHECK_INTERVAL_HOURS = 24  # 24시간마다 업데이트 확인
 # 윈도우 설정
 WINDOW_WIDTH = 420
 WINDOW_HEIGHT = 600
-MIN_WINDOW_WIDTH = 300
+MIN_WINDOW_WIDTH = 420  # 텍스트 최소 너비(220px) + 좌우 여백(200px) 보장
 MIN_WINDOW_HEIGHT = 400
 
 # 데이터 기본 설정
@@ -172,8 +172,8 @@ WIDGET_SIZES = {
 # 레이아웃 동적 계산 설정 (윈도우 기본 너비 420px 기준)
 LAYOUT_SIZES = {
     'window_default_width': 420,
-    'todo_text_base_max_width': 220,    # TODO 텍스트 기본 최대 너비
-    'subtask_text_max_width': 196,      # SubTask 텍스트 최대 너비 (220 - 24 들여쓰기)
+    'todo_text_base_max_width': 220,    # TODO 텍스트 최소 너비 (반응형: 윈도우 확장 시 자동 확장)
+    'subtask_text_max_width': 196,      # SubTask 텍스트 최소 너비 (220 - 24 들여쓰기, 반응형)
     'left_margin_total': 52,            # 좌측 여백 합계 (드래그 14 + 체크박스 18 + 여백 20)
     'right_margin_total': 184,          # 우측 여백 합계 (펼치기 16 + 반복 20 + 납기 100 + 삭제 24 + 여백 24)
 }

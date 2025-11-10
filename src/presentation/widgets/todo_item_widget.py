@@ -109,10 +109,10 @@ class TodoItemWidget(QWidget, DraggableMixin):
         first_row_layout.setContentsMargins(0, 0, 0, 0)
 
         # TODO 텍스트 (RichTextWidget 사용 - 링크/경로 인식)
-        # 동적 최대 너비 계산으로 오른쪽 UI가 화면 밖으로 밀려나지 않도록 함
+        # 최소 너비만 설정하여 윈도우 크기에 따라 자동 확장되도록 함
         self.todo_text = RichTextWidget(str(self.todo.content))
         self.todo_text.setObjectName("todoText")
-        self.todo_text.setMaximumWidth(self._calculate_max_text_width())
+        self.todo_text.setMinimumWidth(config.LAYOUT_SIZES['todo_text_base_max_width'])  # 최소 220px
         if self.todo.completed:
             self.todo_text.setProperty("completed", "true")
         first_row_layout.addWidget(self.todo_text, 1)  # stretch

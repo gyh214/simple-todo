@@ -76,10 +76,12 @@ class SubTaskWidget(QWidget):
         content_layout.setSpacing(8)
         content_layout.setContentsMargins(0, 0, 0, 0)
 
-        # SubTask 텍스트
+        # SubTask 텍스트 (최대 너비 제한으로 메인 TodoItemWidget 초과 방지)
         self.subtask_text = QLabel(str(self.subtask.content))
         self.subtask_text.setObjectName("subtaskText")
         self.subtask_text.setWordWrap(False)
+        # 메인 TODO 텍스트(220px) - 들여쓰기(24px) = 196px
+        self.subtask_text.setMaximumWidth(config.LAYOUT_SIZES['subtask_text_max_width'])
         if self.subtask.completed:
             self.subtask_text.setProperty("completed", "true")
         content_layout.addWidget(self.subtask_text, 1)  # stretch factor = 1
@@ -118,6 +120,7 @@ class SubTaskWidget(QWidget):
         """
         badge = QLabel()
         badge.setObjectName("subtaskDateBadge")
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 텍스트 중앙 정렬
 
         # 날짜 텍스트 및 상태 설정
         text, status = self._format_due_date_text()

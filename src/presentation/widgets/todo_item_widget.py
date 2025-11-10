@@ -103,24 +103,24 @@ class TodoItemWidget(QWidget, DraggableMixin):
         content_layout.setSpacing(config.LAYOUT_SPACING['todo_item_content'])
         content_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 첫 번째 행: TODO 텍스트 + 펼치기 버튼 + 날짜 배지
+        # 첫 번째 행: TODO 텍스트 + 오른쪽 UI 컨테이너
         first_row_layout = QHBoxLayout()
         first_row_layout.setSpacing(8)
         first_row_layout.setContentsMargins(0, 0, 0, 0)
 
         # TODO 텍스트 (RichTextWidget 사용 - 링크/경로 인식)
-        # 최대 너비를 설정하여 긴 텍스트가 오른쪽 UI를 밀어내지 않도록 함
+        # 동적 최대 너비 계산으로 오른쪽 UI가 화면 밖으로 밀려나지 않도록 함
         self.todo_text = RichTextWidget(str(self.todo.content))
         self.todo_text.setObjectName("todoText")
-        self.todo_text.setMaximumWidth(600)  # 최대 너비 제한 (윈도우 기본 너비 420px 고려)
+        self.todo_text.setMaximumWidth(self._calculate_max_text_width())
         if self.todo.completed:
             self.todo_text.setProperty("completed", "true")
         first_row_layout.addWidget(self.todo_text, 1)  # stretch
 
-        # 신축 공간 (텍스트와 오른쪽 요소 사이)
-        first_row_layout.addStretch()
-
-        # === 오른쪽 UI 요소들 (고정 너비) ===
+        # === 오른쪽 UI 컨테이너 (고정 너비 요소들을 하나로 묶음) ===
+        right_widgets_layout = QHBoxLayout()
+        right_widgets_layout.setSpacing(8)
+        right_widgets_layout.setContentsMargins(0, 0, 0, 0)
 
         # 펼치기/접기 버튼 (하위 할일이 있을 때만 표시)
         self.expand_btn = QPushButton("▶")
@@ -130,7 +130,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.expand_btn.clicked.connect(self._toggle_subtasks)
         if len(self.todo.subtasks) == 0:
             self.expand_btn.setVisible(False)
-        first_row_layout.addWidget(self.expand_btn, 0)  # stretch=0 (고정)
+        right_widgets_layout.addWidget(self.expand_btn)
 
         # 반복 아이콘 (반복 할일일 때만 표시)
         if self.todo.recurrence:
@@ -138,7 +138,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
             self.recurrence_icon.setObjectName("recurrenceIcon")
             self.recurrence_icon.setFixedWidth(20)  # 고정 너비
             self.recurrence_icon.setToolTip(f"반복: {self.todo.recurrence}")
-            first_row_layout.addWidget(self.recurrence_icon, 0)  # stretch=0 (고정)
+            right_widgets_layout.addWidget(self.recurrence_icon)
         else:
             self.recurrence_icon = None
 
@@ -147,9 +147,12 @@ class TodoItemWidget(QWidget, DraggableMixin):
             self.date_badge = self._create_date_badge()
             self.date_badge.setMinimumWidth(70)  # 최소 너비
             self.date_badge.setMaximumWidth(100)  # 최대 너비
-            first_row_layout.addWidget(self.date_badge, 0)  # stretch=0 (고정)
+            right_widgets_layout.addWidget(self.date_badge)
         else:
             self.date_badge = None
+
+        # 오른쪽 UI 컨테이너를 첫 번째 행에 추가 (stretch=0으로 고정)
+        first_row_layout.addLayout(right_widgets_layout, 0)
 
         content_layout.addLayout(first_row_layout)
         main_layout.addLayout(content_layout, 1)  # stretch factor = 1
@@ -192,6 +195,20 @@ class TodoItemWidget(QWidget, DraggableMixin):
         # 하위 할일 컨테이너를 전체 레이아웃에 추가
         container_layout.addWidget(self.subtasks_container)
 
+    def _calculate_max_text_width(self) -> int:
+        """사용 가능한 TODO 텍스트 최대 너비 동적 계산
+
+        윈도우 기본 너비(420px) 기준:
+        - 좌측: 드래그(14) + 체크박스(18) + 여백(10+10) = 52px
+        - 우측: 펼치기(16) + 반복(20) + 납기(100) + 삭제(24) + 여백(24) = 184px
+        - 사용 가능: 420 - 52 - 184 = 184px
+        - 여유 있게 220px로 설정 (긴 텍스트도 일부 표시 가능)
+
+        Returns:
+            int: TODO 텍스트 최대 너비 (픽셀)
+        """
+        return config.LAYOUT_SIZES['todo_text_base_max_width']
+
     def _create_date_badge(self) -> QLabel:
         """납기일 배지 생성
 
@@ -200,6 +217,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         """
         badge = QLabel()
         badge.setObjectName("dateBadge")
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 텍스트 중앙 정렬
 
         # 날짜 텍스트 및 상태 설정
         text, status = self._format_due_date_text()

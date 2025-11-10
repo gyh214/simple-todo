@@ -169,6 +169,15 @@ WIDGET_SIZES = {
     'subtask_indent': 24,  # 하위 할일 들여쓰기
 }
 
+# 레이아웃 동적 계산 설정 (윈도우 기본 너비 420px 기준)
+LAYOUT_SIZES = {
+    'window_default_width': 420,
+    'todo_text_base_max_width': 220,    # TODO 텍스트 기본 최대 너비
+    'subtask_text_max_width': 196,      # SubTask 텍스트 최대 너비 (220 - 24 들여쓰기)
+    'left_margin_total': 52,            # 좌측 여백 합계 (드래그 14 + 체크박스 18 + 여백 20)
+    'right_margin_total': 184,          # 우측 여백 합계 (펼치기 16 + 반복 20 + 납기 100 + 삭제 24 + 여백 24)
+}
+
 # 폰트 크기 설정
 FONT_SIZES = {
     'xs': 9,     # section count

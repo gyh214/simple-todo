@@ -25,6 +25,7 @@ class MainWindow(QMainWindow):
     Phase 5-1: 헤더 UI 구현 (타이틀, 정렬, 입력창, 추가 버튼)
     Phase 5-3: 진행중/완료 섹션 및 분할바 구현 (QSplitter 사용)
     Phase 6-3: 윈도우 관리 구현 (크기/위치/항상위 상태 저장)
+    Phase 6-6: UpdateManager 통합 (자동 업데이트 기능)
     """
 
     def __init__(self, repository=None):
@@ -42,6 +43,9 @@ class MainWindow(QMainWindow):
         self.window_manager: Optional[WindowManager] = None
         if self.repository:
             self.window_manager = WindowManager(self, self.repository)
+
+        # Phase 6: UpdateManager (나중에 설정됨)
+        self.update_manager = None
 
         # TodoService 초기화 (DI Container에서 조회)
         from src.core.container import Container, ServiceNames
@@ -193,6 +197,60 @@ class MainWindow(QMainWindow):
             self.window_manager.toggle_always_on_top()
         else:
             logger.warning("WindowManager not initialized, cannot toggle always on top")
+
+    # ============================================================================
+    # Phase 6: UpdateManager 통합
+    # ============================================================================
+
+    def set_update_manager(self, update_manager) -> None:
+        """
+        UpdateManager 설정 (DI Container에서 주입)
+
+        Args:
+            update_manager: UpdateManager 인스턴스
+        """
+        self.update_manager = update_manager
+        logger.info("UpdateManager set successfully")
+
+        # 앱 시작 3초 후 자동 업데이트 체크
+        QTimer.singleShot(3000, self._check_for_updates_on_startup)
+
+    def _check_for_updates_on_startup(self) -> None:
+        """앱 시작 시 자동 업데이트 체크 (내부 메서드)"""
+        if self.update_manager:
+            try:
+                self.update_manager.check_for_updates_on_startup()
+                logger.info("Auto-update check scheduled on startup")
+            except Exception as e:
+                logger.error(f"Failed to schedule auto-update check: {e}")
+        else:
+            logger.warning("UpdateManager not set, skipping auto-update check")
+
+    def check_for_updates_manual(self) -> None:
+        """
+        수동 업데이트 체크 (트레이 메뉴에서 호출)
+
+        사용자가 명시적으로 업데이트를 확인할 때 사용
+        """
+        if self.update_manager:
+            try:
+                self.update_manager.check_for_updates_manual()
+                logger.info("Manual update check requested")
+            except Exception as e:
+                logger.error(f"Failed to check for updates manually: {e}")
+        else:
+            logger.warning("UpdateManager not set, cannot check for updates")
+            # 사용자에게 피드백 제공
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self,
+                "업데이트 확인",
+                "업데이트 기능을 사용할 수 없습니다."
+            )
+
+    # ============================================================================
+    # 윈도우 이벤트 핸들러
+    # ============================================================================
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """윈도우 닫기 이벤트 핸들러

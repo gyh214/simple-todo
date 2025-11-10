@@ -11,6 +11,7 @@ from PyQt6.QtGui import QIntValidator
 from typing import List, Dict
 
 import config
+from ..utils.color_utils import create_dialog_palette, apply_palette_recursive
 
 
 class BackupManagerDialog(QDialog):
@@ -36,6 +37,9 @@ class BackupManagerDialog(QDialog):
 
         # 백업 표시 일수 (config에서 기본값)
         self.backup_display_days = config.BACKUP_DISPLAY_DAYS
+
+        # Palette 적용 플래그
+        self._palette_applied = False
 
         self.setup_ui()
         self.apply_styles()
@@ -646,6 +650,14 @@ class BackupManagerDialog(QDialog):
             self.reject()
         else:
             super().keyPressEvent(event)
+
+    def showEvent(self, event):
+        """다이얼로그 표시 시 QPalette 적용 (한 번만 실행)"""
+        super().showEvent(event)
+        if not self._palette_applied:
+            palette = create_dialog_palette()
+            apply_palette_recursive(self, palette)
+            self._palette_applied = True
 
     def apply_styles(self):
         """스타일 시트 적용"""

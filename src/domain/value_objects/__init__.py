@@ -5,6 +5,7 @@ from .todo_id import TodoId
 from .content import Content
 from .due_date import DueDate, DueDateStatus
 from .recurrence_rule import RecurrenceRule
+from .app_version import AppVersion
 
 __all__ = [
     'TodoId',
@@ -12,4 +13,5 @@ __all__ = [
     'DueDate',
     'DueDateStatus',
     'RecurrenceRule',
+    'AppVersion',
 ]

@@ -11,3 +11,6 @@ PyInstaller>=6.0.0
 
 # System Utilities
 psutil>=5.9.0
+
+# HTTP Requests (Auto-Update)
+requests>=2.31.0

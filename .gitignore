@@ -41,3 +41,18 @@ nul
 # OS
 .DS_Store
 Thumbs.db
+.pytest_cache/
+# Virtual environment
+.venv/
+node_modules/
+# Logs
+*.pyc
+# Backups
+*.temp
+# Cache
+# Build artifacts
+*.tsbuildinfo
+# Temporary files
+.tscache/
+*.egg
+.env/

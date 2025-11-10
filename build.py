@@ -28,7 +28,7 @@ import subprocess
 import shutil
 import time
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple
 import argparse
 
 
@@ -64,6 +64,132 @@ class BuildManager:
             print(f"[{timestamp}] [SUCCESS] {message}")
         else:
             print(f"[{timestamp}] [INFO] {message}")
+
+    def get_version_from_config(self) -> str:
+        """config.py에서 APP_VERSION 읽기"""
+        try:
+            config_file = self.root_dir / 'config.py'
+            if not config_file.exists():
+                self.log(f"config.py 파일을 찾을 수 없습니다: {config_file}", "ERROR")
+                return "1.0"
+
+            # config.py 파일 읽기
+            with open(config_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip().startswith('APP_VERSION'):
+                        # APP_VERSION = "2.4" 형식에서 버전 추출
+                        parts = line.split('=')
+                        if len(parts) == 2:
+                            version = parts[1].strip().strip('"').strip("'")
+                            self.log(f"config.py에서 버전 읽음: {version}")
+                            return version
+
+            self.log("config.py에서 APP_VERSION을 찾을 수 없습니다", "WARNING")
+            return "1.0"
+
+        except Exception as e:
+            self.log(f"config.py 읽기 실패: {e}", "ERROR")
+            return "1.0"
+
+    def parse_version(self, version_str: str) -> Tuple[int, int, int, int]:
+        """버전 문자열을 (major, minor, patch, build) 튜플로 변환"""
+        try:
+            parts = version_str.split('.')
+            major = int(parts[0]) if len(parts) > 0 else 1
+            minor = int(parts[1]) if len(parts) > 1 else 0
+            patch = int(parts[2]) if len(parts) > 2 else 0
+            build = int(parts[3]) if len(parts) > 3 else 0
+
+            return (major, minor, patch, build)
+
+        except Exception as e:
+            self.log(f"버전 파싱 실패: {e}", "WARNING")
+            return (1, 0, 0, 0)
+
+    def generate_version_info_file(self) -> bool:
+        """config.py의 버전을 기반으로 version_info.txt 자동 생성"""
+        self.log("버전 정보 파일 생성 중...")
+
+        try:
+            # config.py에서 버전 읽기
+            version_str = self.get_version_from_config()
+            version_tuple = self.parse_version(version_str)
+
+            # 버전 정보 파일 내용 생성
+            version_info_content = f'''# UTF-8
+#
+# Windows 실행 파일에 대한 버전 정보
+# PyInstaller에서 --version-file 옵션으로 사용됩니다.
+# 이 파일은 build.py에 의해 자동 생성됩니다 (config.py의 APP_VERSION 기반)
+#
+
+VSVersionInfo(
+    ffi=FixedFileInfo(
+        # filevers 및 prodvers는 버전을 나타내는 튜플이어야 합니다
+        # ({version_tuple[0]}, {version_tuple[1]}, {version_tuple[2]}, {version_tuple[3]}) = "{version_str}"
+        filevers={version_tuple},
+        prodvers={version_tuple},
+        # mask는 유효한 버전 정보를 포함하는 filevers 구성 요소를 나타냅니다
+        mask=0x3f,
+        # flags는 이 버전의 파일에 적용되는 boolean 속성의 비트 조합입니다
+        flags=0x0,
+        # OS: 이 파일이 설계된 운영 체제
+        OS=0x40004,
+        # fileType: 파일의 일반적인 유형
+        fileType=0x1,
+        # subtype: 파일의 함수
+        subtype=0x0,
+        # date
+        date=(0, 0)
+    ),
+    kids=[
+        StringFileInfo(
+            [
+                StringTable(
+                    u'042004B0',
+                    [
+                        StringStruct(u'CompanyName', u'Simple ToDo Development'),
+                        StringStruct(u'FileDescription', u'Simple ToDo - Minimal Desktop Task Manager'),
+                        StringStruct(u'FileVersion', u'{version_str}.0'),
+                        StringStruct(u'InternalName', u'SimpleTodo'),
+                        StringStruct(u'LegalCopyright', u'Copyright (c) 2025 Simple ToDo Development. All rights reserved.'),
+                        StringStruct(u'OriginalFilename', u'SimpleTodo.exe'),
+                        StringStruct(u'ProductName', u'Simple ToDo'),
+                        StringStruct(u'ProductVersion', u'{version_str}.0'),
+                        StringStruct(u'Comments', u'Simple and minimal desktop task manager application'),
+                    ]
+                ),
+                StringTable(
+                    u'040904B0',
+                    [
+                        StringStruct(u'CompanyName', u'Simple ToDo Development'),
+                        StringStruct(u'FileDescription', u'Simple ToDo - Minimal Desktop Task Manager'),
+                        StringStruct(u'FileVersion', u'{version_str}.0'),
+                        StringStruct(u'InternalName', u'SimpleTodo'),
+                        StringStruct(u'LegalCopyright', u'Copyright (c) 2025 Simple ToDo Development. All rights reserved.'),
+                        StringStruct(u'OriginalFilename', u'SimpleTodo.exe'),
+                        StringStruct(u'ProductName', u'Simple ToDo'),
+                        StringStruct(u'ProductVersion', u'{version_str}.0'),
+                        StringStruct(u'Comments', u'Simple and minimal desktop task manager application'),
+                    ]
+                )
+            ]
+        ),
+        VarFileInfo([VarStruct(u'Translation', [0x420, 1200, 0x409, 1200])])
+    ]
+)
+'''
+
+            # version_info.txt 파일 쓰기
+            with open(self.version_file, 'w', encoding='utf-8') as f:
+                f.write(version_info_content)
+
+            self.log(f"버전 정보 파일 생성 완료: {version_str} → {version_tuple}", "SUCCESS")
+            return True
+
+        except Exception as e:
+            self.log(f"버전 정보 파일 생성 실패: {e}", "ERROR")
+            return False
 
     def check_requirements(self) -> bool:
         """빌드 요구사항 확인"""
@@ -324,22 +450,26 @@ class BuildManager:
             if not self.check_requirements():
                 return False
 
-            # 2. 이전 빌드 정리
+            # 2. 버전 정보 파일 생성 (config.py 기반)
+            if not self.generate_version_info_file():
+                self.log("버전 정보 파일 생성 실패했지만 계속 진행합니다", "WARNING")
+
+            # 3. 이전 빌드 정리
             if not self.clean_previous_builds():
                 return False
 
-            # 3. PyInstaller 실행
+            # 4. PyInstaller 실행
             if not self.run_pyinstaller():
                 return False
 
-            # 4. 빌드 결과 확인
+            # 5. 빌드 결과 확인
             if not self.verify_build_result():
                 return False
 
-            # 5. 임시 파일 정리
+            # 6. 임시 파일 정리
             self.cleanup_temp_files()
 
-            # 6. 빌드 요약 출력
+            # 7. 빌드 요약 출력
             self.print_build_summary()
 
             return True

@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__sequential-thinking__sequentialthinking_tools",
+      "Read(//d/dev_proj/todo-panel/**)",
+      "Bash(sed:*)",
+      "Bash(tree:*)",
+      "Read(//d/**)",
+      "mcp__magicui__getButtons",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)",
+      "Bash(if [ -f \"dist/SimpleTodo.exe\" ])",
+      "Bash(then echo \"EXE 파일 존재\")",
+      "Bash(else echo \"EXE 파일 없음\")",
+      "Bash(fi)",
+      "Bash(dir /B /O-D logs*.log 2)",
+      "Bash(nul)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

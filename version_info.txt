@@ -2,14 +2,15 @@
 #
 # Windows 실행 파일에 대한 버전 정보
 # PyInstaller에서 --version-file 옵션으로 사용됩니다.
+# 이 파일은 build.py에 의해 자동 생성됩니다 (config.py의 APP_VERSION 기반)
 #
 
 VSVersionInfo(
     ffi=FixedFileInfo(
         # filevers 및 prodvers는 버전을 나타내는 튜플이어야 합니다
-        # (1, 0, 0, 0) = "1.0.0.0"
-        filevers=(1, 0, 0, 0),
-        prodvers=(1, 0, 0, 0),
+        # (2, 5, 1, 0) = "2.5.1"
+        filevers=(2, 5, 1, 0),
+        prodvers=(2, 5, 1, 0),
         # mask는 유효한 버전 정보를 포함하는 filevers 구성 요소를 나타냅니다
         mask=0x3f,
         # flags는 이 버전의 파일에 적용되는 boolean 속성의 비트 조합입니다
@@ -31,12 +32,12 @@ VSVersionInfo(
                     [
                         StringStruct(u'CompanyName', u'Simple ToDo Development'),
                         StringStruct(u'FileDescription', u'Simple ToDo - Minimal Desktop Task Manager'),
-                        StringStruct(u'FileVersion', u'1.0.0.0'),
+                        StringStruct(u'FileVersion', u'2.5.1.0'),
                         StringStruct(u'InternalName', u'SimpleTodo'),
                         StringStruct(u'LegalCopyright', u'Copyright (c) 2025 Simple ToDo Development. All rights reserved.'),
                         StringStruct(u'OriginalFilename', u'SimpleTodo.exe'),
                         StringStruct(u'ProductName', u'Simple ToDo'),
-                        StringStruct(u'ProductVersion', u'1.0.0.0'),
+                        StringStruct(u'ProductVersion', u'2.5.1.0'),
                         StringStruct(u'Comments', u'Simple and minimal desktop task manager application'),
                     ]
                 ),
@@ -45,12 +46,12 @@ VSVersionInfo(
                     [
                         StringStruct(u'CompanyName', u'Simple ToDo Development'),
                         StringStruct(u'FileDescription', u'Simple ToDo - Minimal Desktop Task Manager'),
-                        StringStruct(u'FileVersion', u'1.0.0.0'),
+                        StringStruct(u'FileVersion', u'2.5.1.0'),
                         StringStruct(u'InternalName', u'SimpleTodo'),
                         StringStruct(u'LegalCopyright', u'Copyright (c) 2025 Simple ToDo Development. All rights reserved.'),
                         StringStruct(u'OriginalFilename', u'SimpleTodo.exe'),
                         StringStruct(u'ProductName', u'Simple ToDo'),
-                        StringStruct(u'ProductVersion', u'1.0.0.0'),
+                        StringStruct(u'ProductVersion', u'2.5.1.0'),
                         StringStruct(u'Comments', u'Simple and minimal desktop task manager application'),
                     ]
                 )

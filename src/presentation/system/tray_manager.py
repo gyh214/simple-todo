@@ -86,6 +86,16 @@ class SystemTrayManager:
         # 구분선
         menu.addSeparator()
 
+        # ====================================================================
+        # Phase 6: "업데이트 확인" 메뉴 추가
+        # ====================================================================
+        update_action = QAction("업데이트 확인", self.main_window)
+        update_action.triggered.connect(self._check_for_updates)
+        menu.addAction(update_action)
+
+        # 구분선
+        menu.addSeparator()
+
         # "더 많은 유용한 도구들" 액션 (kochim.com 홍보)
         tools_action = QAction("더 많은 유용한 도구들", self.main_window)
         tools_action.triggered.connect(self._open_kochim_website)
@@ -138,6 +148,18 @@ class SystemTrayManager:
         # 애플리케이션 종료
         from PyQt6.QtWidgets import QApplication
         QApplication.quit()
+
+    # ====================================================================
+    # Phase 6: 업데이트 확인 메서드
+    # ====================================================================
+
+    def _check_for_updates(self) -> None:
+        """
+        수동 업데이트 확인 (트레이 메뉴에서 호출)
+
+        MainWindow의 check_for_updates_manual 메서드를 호출합니다.
+        """
+        self.main_window.check_for_updates_manual()
 
     def _open_kochim_website(self) -> None:
         """kochim.com 웹사이트 브라우저에서 열기"""

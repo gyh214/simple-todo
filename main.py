@@ -103,6 +103,86 @@ def initialize_application_layer():
         raise
 
 
+def initialize_update_services():
+    """
+    Phase 6: Update 관련 서비스 초기화
+
+    자동 업데이트 기능을 위한 모든 레이어의 서비스를 생성하고 DI Container에 등록
+    """
+    try:
+        # Domain Layer
+        from src.domain.value_objects.app_version import AppVersion
+        from src.domain.services.version_comparison_service import VersionComparisonService
+
+        # Infrastructure Layer
+        from src.infrastructure.repositories.github_release_repository import GitHubReleaseRepository
+        from src.infrastructure.repositories.update_settings_repository import UpdateSettingsRepository
+        from src.infrastructure.services.update_downloader_service import UpdateDownloaderService
+        from src.infrastructure.services.update_installer_service import UpdateInstallerService
+
+        # Application Layer
+        from src.application.use_cases.check_for_updates import CheckForUpdatesUseCase
+        from src.application.use_cases.download_update import DownloadUpdateUseCase
+        from src.application.use_cases.install_update import InstallUpdateUseCase
+        from src.application.services.update_scheduler_service import UpdateSchedulerService
+
+        # Infrastructure Layer 등록
+        github_repo = GitHubReleaseRepository(
+            repo_owner=config.GITHUB_REPO_OWNER,
+            repo_name=config.GITHUB_REPO_NAME
+        )
+        Container.register(ServiceNames.GITHUB_RELEASE_REPOSITORY, github_repo)
+
+        settings_repo = UpdateSettingsRepository(config.DATA_FILE)
+        Container.register(ServiceNames.UPDATE_SETTINGS_REPOSITORY, settings_repo)
+
+        downloader = UpdateDownloaderService()
+        Container.register(ServiceNames.UPDATE_DOWNLOADER_SERVICE, downloader)
+
+        installer = UpdateInstallerService()
+        Container.register(ServiceNames.UPDATE_INSTALLER_SERVICE, installer)
+
+        # Application Layer 등록
+        current_version = AppVersion.from_string(config.APP_VERSION)
+        version_service = VersionComparisonService()
+
+        check_use_case = CheckForUpdatesUseCase(
+            github_repo=github_repo,
+            settings_repo=settings_repo,
+            version_service=version_service,
+            current_version=current_version,
+            check_interval_hours=config.UPDATE_CHECK_INTERVAL_HOURS
+        )
+        Container.register(ServiceNames.CHECK_FOR_UPDATES_USE_CASE, check_use_case)
+
+        download_use_case = DownloadUpdateUseCase(
+            downloader=downloader,
+            filename="SimpleTodo_new.exe"
+        )
+        Container.register(ServiceNames.DOWNLOAD_UPDATE_USE_CASE, download_use_case)
+
+        install_use_case = InstallUpdateUseCase(
+            installer=installer,
+            current_exe_path=Path(sys.executable)
+        )
+        Container.register(ServiceNames.INSTALL_UPDATE_USE_CASE, install_use_case)
+
+        scheduler = UpdateSchedulerService(
+            check_use_case=check_use_case,
+            settings_repo=settings_repo
+        )
+        Container.register(ServiceNames.UPDATE_SCHEDULER_SERVICE, scheduler)
+
+        logger.info("Update services initialized successfully")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to initialize update services: {e}")
+        # 업데이트 기능은 선택 사항이므로 앱 시작을 중단하지 않음
+        logger.warning("App will continue without auto-update feature")
+        return False
+
+
 def initialize_presentation_layer():
     """
     Presentation Layer 초기화
@@ -116,12 +196,85 @@ def initialize_presentation_layer():
     logger.info("Presentation layer initialized successfully")
 
 
+def setup_global_palette(app):
+    """
+    전역 QPalette 설정 (다크 모드 강제 적용)
+
+    Windows 시스템 테마와 무관하게 config.COLORS 기반 다크 모드 적용
+    """
+    from PyQt6.QtGui import QPalette, QColor
+
+    palette = QPalette()
+
+    # Helper: rgba 문자열을 QColor로 변환
+    def parse_color(color_str):
+        if color_str.startswith('rgba'):
+            # rgba(255, 255, 255, 0.92) -> QColor
+            parts = color_str.replace('rgba(', '').replace(')', '').split(',')
+            r, g, b = int(parts[0]), int(parts[1]), int(parts[2])
+            a = int(float(parts[3]) * 255)
+            return QColor(r, g, b, a)
+        else:
+            # #RRGGBB -> QColor
+            return QColor(color_str)
+
+    # 배경 색상
+    palette.setColor(QPalette.ColorRole.Window, parse_color(config.COLORS['primary_bg']))
+    palette.setColor(QPalette.ColorRole.Base, parse_color(config.COLORS['secondary_bg']))
+    palette.setColor(QPalette.ColorRole.AlternateBase, parse_color(config.COLORS['card']))
+
+    # 텍스트 색상
+    palette.setColor(QPalette.ColorRole.WindowText, parse_color(config.COLORS['text_primary']))
+    palette.setColor(QPalette.ColorRole.Text, parse_color(config.COLORS['text_primary']))
+    palette.setColor(QPalette.ColorRole.ButtonText, parse_color(config.COLORS['text_primary']))
+    palette.setColor(QPalette.ColorRole.BrightText, parse_color(config.COLORS['text_primary']))
+
+    # 버튼 배경
+    palette.setColor(QPalette.ColorRole.Button, parse_color(config.COLORS['secondary_bg']))
+
+    # 하이라이트 (선택 영역)
+    palette.setColor(QPalette.ColorRole.Highlight, parse_color(config.COLORS['accent']))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor('#FFFFFF'))
+
+    # 링크
+    palette.setColor(QPalette.ColorRole.Link, parse_color(config.COLORS['accent']))
+    palette.setColor(QPalette.ColorRole.LinkVisited, parse_color(config.COLORS['accent_hover']))
+
+    # 비활성화 상태 (Disabled 그룹)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText,
+                     parse_color(config.COLORS['text_disabled']))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text,
+                     parse_color(config.COLORS['text_disabled']))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText,
+                     parse_color(config.COLORS['text_disabled']))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Button,
+                     parse_color(config.COLORS['card']))
+
+    # 툴팁 색상
+    palette.setColor(QPalette.ColorRole.ToolTipBase, parse_color(config.COLORS['secondary_bg']))
+    palette.setColor(QPalette.ColorRole.ToolTipText, parse_color(config.COLORS['text_primary']))
+
+    # 플레이스홀더 색상 (QLineEdit, QTextEdit)
+    palette.setColor(QPalette.ColorRole.PlaceholderText, parse_color(config.COLORS['text_disabled']))
+
+    # 전역 팔레트 적용
+    app.setPalette(palette)
+
+    # Fusion 스타일 적용 (플랫폼 독립적 일관성)
+    app.setStyle('Fusion')
+
+    logger.info("Global QPalette applied (Dark Mode enforced)")
+
+
 def main():
     """애플리케이션 진입점"""
     from PyQt6.QtWidgets import QMessageBox
     from src.presentation.system.single_instance import SingleInstanceManager
 
     app = QApplication(sys.argv)
+
+    # 전역 다크 모드 팔레트 적용 (Windows 시스템 테마 무시)
+    setup_global_palette(app)
 
     # 애플리케이션 설정
     app.setApplicationName(config.APP_NAME)
@@ -162,13 +315,35 @@ def main():
     # 첫 실행 - 활성화 요청 수신 리스너 시작
     single_instance.start_listener()
 
-    # DI Container 초기화 (Infrastructure → Application → Presentation)
+    # DI Container 초기화 (Infrastructure → Application → Update → Presentation)
     repository = initialize_infrastructure_layer()
     initialize_application_layer()
+    initialize_update_services()  # Phase 6: 업데이트 서비스 초기화
     initialize_presentation_layer()
 
     # 메인 윈도우 생성 (Repository 주입)
     window = MainWindow(repository=repository)
+
+    # Phase 6: UpdateManager 생성 및 주입 (선택적)
+    try:
+        from src.presentation.system.update_manager import UpdateManager
+
+        update_manager = UpdateManager(
+            parent_window=window,
+            scheduler=Container.resolve(ServiceNames.UPDATE_SCHEDULER_SERVICE),
+            check_use_case=Container.resolve(ServiceNames.CHECK_FOR_UPDATES_USE_CASE),
+            download_use_case=Container.resolve(ServiceNames.DOWNLOAD_UPDATE_USE_CASE),
+            install_use_case=Container.resolve(ServiceNames.INSTALL_UPDATE_USE_CASE),
+            current_version=config.APP_VERSION
+        )
+
+        # UpdateManager를 MainWindow에 설정
+        window.set_update_manager(update_manager)
+        logger.info("UpdateManager integrated successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to integrate UpdateManager: {e}")
+        logger.warning("App will continue without auto-update UI integration")
 
     # 활성화 요청 시 창 표시
     single_instance.activate_requested.connect(lambda: (window.show(), window.activateWindow(), window.raise_()))

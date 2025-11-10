@@ -16,6 +16,7 @@ from ...domain.entities.subtask import SubTask
 from ...domain.value_objects.todo_id import TodoId
 from ...domain.value_objects.recurrence_rule import RecurrenceRule
 from .date_picker_dialog import DatePickerDialog
+from ..utils.color_utils import create_dialog_palette, apply_palette_recursive
 
 
 class CollapsibleSection(QWidget):
@@ -110,6 +111,7 @@ class EditDialog(QDialog):
         super().__init__(parent)
         self.todo_id: Optional[str] = None
         self.subtasks: List[SubTask] = []  # 하위 할일 리스트
+        self._palette_applied = False  # palette 적용 여부 플래그
         self.setup_ui()
         self.apply_styles()
 
@@ -733,6 +735,14 @@ class EditDialog(QDialog):
         else:
             super().keyPressEvent(event)
 
+    def showEvent(self, event):
+        """다이얼로그 표시 시 QPalette 적용 (한 번만 실행)"""
+        super().showEvent(event)
+        if not self._palette_applied:
+            palette = create_dialog_palette()
+            apply_palette_recursive(self, palette)
+            self._palette_applied = True
+
     def apply_styles(self):
         """스타일 시트 적용"""
         self.setStyleSheet(f"""
@@ -1063,6 +1073,7 @@ class SubTaskEditDialog(QDialog):
         self.setModal(True)
         self.setWindowTitle("하위 할일 편집")
         self.setFixedSize(380, 300)
+        self._palette_applied = False  # palette 적용 여부 플래그
         self._setup_ui()
         self._apply_styles()
 
@@ -1191,6 +1202,14 @@ class SubTaskEditDialog(QDialog):
         """데이터 반환 (content, due_date)"""
         content = self.content_edit.toPlainText().strip()
         return (content, self.selected_date)
+
+    def showEvent(self, event):
+        """다이얼로그 표시 시 QPalette 적용 (한 번만 실행)"""
+        super().showEvent(event)
+        if not self._palette_applied:
+            palette = create_dialog_palette()
+            apply_palette_recursive(self, palette)
+            self._palette_applied = True
 
     def _apply_styles(self):
         """스타일 적용"""

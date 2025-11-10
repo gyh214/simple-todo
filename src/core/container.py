@@ -105,3 +105,22 @@ class ServiceNames:
     SYSTEM_TRAY_MANAGER = "system_tray_manager"
     SINGLE_INSTANCE_MANAGER = "single_instance_manager"
     WINDOW_MANAGER = "window_manager"
+
+    # ============================================================================
+    # Phase 6: Update 관련 서비스 (자동 업데이트 기능)
+    # ============================================================================
+
+    # Infrastructure Layer - Update
+    GITHUB_RELEASE_REPOSITORY = "github_release_repository"
+    UPDATE_SETTINGS_REPOSITORY = "update_settings_repository"
+    UPDATE_DOWNLOADER_SERVICE = "update_downloader_service"
+    UPDATE_INSTALLER_SERVICE = "update_installer_service"
+
+    # Application Layer - Update
+    CHECK_FOR_UPDATES_USE_CASE = "check_for_updates_use_case"
+    DOWNLOAD_UPDATE_USE_CASE = "download_update_use_case"
+    INSTALL_UPDATE_USE_CASE = "install_update_use_case"
+    UPDATE_SCHEDULER_SERVICE = "update_scheduler_service"
+
+    # Presentation Layer - Update
+    UPDATE_MANAGER = "update_manager"

@@ -30,7 +30,15 @@ BACKUP_DIR.mkdir(exist_ok=True)
 
 # 애플리케이션 기본 설정
 APP_NAME = "Simple ToDo"
-APP_VERSION = "1.0"
+APP_VERSION = "2.5.3"
+
+# GitHub Repository 정보 (자동 업데이트용)
+GITHUB_REPO_OWNER = "gyh214"
+GITHUB_REPO_NAME = "simple-todo"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}"
+
+# 업데이트 설정
+UPDATE_CHECK_INTERVAL_HOURS = 24  # 24시간마다 업데이트 확인
 
 # 윈도우 설정
 WINDOW_WIDTH = 420

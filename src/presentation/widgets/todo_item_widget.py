@@ -109,11 +109,18 @@ class TodoItemWidget(QWidget, DraggableMixin):
         first_row_layout.setContentsMargins(0, 0, 0, 0)
 
         # TODO 텍스트 (RichTextWidget 사용 - 링크/경로 인식)
+        # 최대 너비를 설정하여 긴 텍스트가 오른쪽 UI를 밀어내지 않도록 함
         self.todo_text = RichTextWidget(str(self.todo.content))
         self.todo_text.setObjectName("todoText")
+        self.todo_text.setMaximumWidth(600)  # 최대 너비 제한 (윈도우 기본 너비 420px 고려)
         if self.todo.completed:
             self.todo_text.setProperty("completed", "true")
         first_row_layout.addWidget(self.todo_text, 1)  # stretch
+
+        # 신축 공간 (텍스트와 오른쪽 요소 사이)
+        first_row_layout.addStretch()
+
+        # === 오른쪽 UI 요소들 (고정 너비) ===
 
         # 펼치기/접기 버튼 (하위 할일이 있을 때만 표시)
         self.expand_btn = QPushButton("▶")
@@ -123,21 +130,24 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.expand_btn.clicked.connect(self._toggle_subtasks)
         if len(self.todo.subtasks) == 0:
             self.expand_btn.setVisible(False)
-        first_row_layout.addWidget(self.expand_btn)
+        first_row_layout.addWidget(self.expand_btn, 0)  # stretch=0 (고정)
 
         # 반복 아이콘 (반복 할일일 때만 표시)
         if self.todo.recurrence:
             self.recurrence_icon = QLabel("🔁")
             self.recurrence_icon.setObjectName("recurrenceIcon")
+            self.recurrence_icon.setFixedWidth(20)  # 고정 너비
             self.recurrence_icon.setToolTip(f"반복: {self.todo.recurrence}")
-            first_row_layout.addWidget(self.recurrence_icon)
+            first_row_layout.addWidget(self.recurrence_icon, 0)  # stretch=0 (고정)
         else:
             self.recurrence_icon = None
 
         # TODO 메타 정보 (납기일 배지)
         if self.todo.due_date:
             self.date_badge = self._create_date_badge()
-            first_row_layout.addWidget(self.date_badge)
+            self.date_badge.setMinimumWidth(70)  # 최소 너비
+            self.date_badge.setMaximumWidth(100)  # 최대 너비
+            first_row_layout.addWidget(self.date_badge, 0)  # stretch=0 (고정)
         else:
             self.date_badge = None
 

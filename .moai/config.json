@@ -1,0 +1,20 @@
+{
+  "project": {
+    "name": "new-todo-panel",
+    "mode": "personal",
+    "locale": "ko",
+    "language": "generic",
+    "language_detection": {
+      "detected_language": "generic",
+      "detection_method": "cli_default",
+      "confidence": null,
+      "markers": [],
+      "confirmed_by": null
+    },
+    "optimized": true
+  },
+  "language": {
+    "conversation_language": "ko",
+    "conversation_language_name": "Korean"
+  }
+}

@@ -88,6 +88,7 @@ class BackupManagerDialog(QDialog):
     def _create_backup_tab(self) -> QWidget:
         """백업 관리 탭 생성 (수평 분할: 백업 목록 + TODO 미리보기)"""
         widget = QWidget()
+        widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         main_layout = QVBoxLayout(widget)
         main_layout.setContentsMargins(*config.LAYOUT_MARGINS['backup_dialog_tab'])
         main_layout.setSpacing(config.LAYOUT_SPACING['backup_dialog_tab'])
@@ -98,6 +99,7 @@ class BackupManagerDialog(QDialog):
 
         # === 왼쪽: 백업 파일 목록 ===
         left_widget = QWidget()
+        left_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(8)
@@ -148,6 +150,7 @@ class BackupManagerDialog(QDialog):
 
         # === 오른쪽: TODO 미리보기 ===
         right_widget = QWidget()
+        right_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(config.BACKUP_DIALOG_LAYOUT['checkbox_spacing'])
@@ -191,6 +194,7 @@ class BackupManagerDialog(QDialog):
     def _create_completed_tab(self) -> QWidget:
         """완료 정리 탭 생성"""
         widget = QWidget()
+        widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(*config.LAYOUT_MARGINS['backup_dialog_tab'])
         layout.setSpacing(config.LAYOUT_SPACING['backup_dialog_tab'])
@@ -221,6 +225,7 @@ class BackupManagerDialog(QDialog):
     def _create_select_tab(self) -> QWidget:
         """선택 삭제 탭 생성"""
         widget = QWidget()
+        widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(*config.LAYOUT_MARGINS['backup_dialog_tab'])
         layout.setSpacing(config.LAYOUT_SPACING['backup_dialog_tab'])
@@ -254,6 +259,7 @@ class BackupManagerDialog(QDialog):
         scroll.setObjectName("todoScroll")
 
         self.checkbox_widget = QWidget()
+        self.checkbox_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.checkbox_layout = QVBoxLayout(self.checkbox_widget)
         self.checkbox_layout.setContentsMargins(*config.BACKUP_DIALOG_LAYOUT['checkbox_margins'])
         self.checkbox_layout.setSpacing(config.BACKUP_DIALOG_LAYOUT['checkbox_spacing'])

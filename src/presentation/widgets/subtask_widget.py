@@ -13,6 +13,7 @@ import config
 from ...domain.entities.subtask import SubTask
 from ...domain.value_objects.todo_id import TodoId
 from ...domain.value_objects.due_date import DueDateStatus
+from .rich_text_widget import RichTextWidget
 
 
 class SubTaskWidget(QWidget):
@@ -76,11 +77,10 @@ class SubTaskWidget(QWidget):
         content_layout.setSpacing(8)
         content_layout.setContentsMargins(0, 0, 0, 0)
 
-        # SubTask 텍스트 (최소 너비만 설정하여 윈도우 크기에 따라 자동 확장)
-        self.subtask_text = QLabel(str(self.subtask.content))
-        self.subtask_text.setObjectName("subtaskText")
-        self.subtask_text.setWordWrap(False)
+        # SubTask 텍스트 (RichTextWidget 사용 - 링크/경로 인식)
         # 메인 TODO 텍스트 최소 너비(220px) - 들여쓰기(24px) = 196px
+        self.subtask_text = RichTextWidget(str(self.subtask.content))
+        self.subtask_text.setObjectName("subtaskText")
         self.subtask_text.setMinimumWidth(
             config.LAYOUT_SIZES['todo_text_base_max_width'] - config.WIDGET_SIZES['subtask_indent']
         )
@@ -354,7 +354,7 @@ class SubTaskWidget(QWidget):
         self.subtask = subtask
 
         # UI 업데이트
-        self.subtask_text.setText(str(self.subtask.content))
+        self.subtask_text.update_text(str(self.subtask.content))
         self.checkbox.setChecked(self.subtask.completed)
 
         # 날짜 배지 업데이트

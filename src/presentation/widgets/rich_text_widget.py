@@ -6,7 +6,7 @@
 - 실행 파일 보안 검증
 """
 
-from PyQt6.QtWidgets import QLabel, QMessageBox
+from PyQt6.QtWidgets import QLabel, QMessageBox, QSizePolicy
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QCursor
 import webbrowser
@@ -44,6 +44,10 @@ class RichTextWidget(QLabel):
         # 1줄 고정 높이 및 줄바꿈 비활성화
         self.setFixedHeight(config.WIDGET_SIZES['todo_text_line_height'])
         self.setWordWrap(False)
+
+        # Size Policy 설정: 너비는 레이아웃에 맡기고(Ignored), 높이는 고정(Fixed)
+        # 이렇게 하면 텍스트 길이에 상관없이 레이아웃에서 지정한 너비를 사용
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
 
         # 링크 클릭 시그널 연결
         self.linkActivated.connect(self._on_link_activated)

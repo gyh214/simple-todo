@@ -134,6 +134,7 @@ class EditDialog(QDialog):
 
         # 콘텐츠 컨테이너
         content_widget = QWidget()
+        content_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(24, 24, 24, 24)
         content_layout.setSpacing(16)
@@ -1067,6 +1068,9 @@ class SubTaskEditDialog(QDialog):
 
     def _setup_ui(self):
         """UI 구성"""
+        # 다이얼로그 배경 렌더링을 위한 속성 설정
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)

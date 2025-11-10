@@ -145,8 +145,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         # TODO 메타 정보 (납기일 배지)
         if self.todo.due_date:
             self.date_badge = self._create_date_badge()
-            self.date_badge.setMinimumWidth(70)  # 최소 너비
-            self.date_badge.setMaximumWidth(100)  # 최대 너비
+            # 너비 제약 제거 - QSS padding(2px 6px)과 font-size(11px)로 자연스러운 크기 결정
             right_widgets_layout.addWidget(self.date_badge)
         else:
             self.date_badge = None

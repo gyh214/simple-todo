@@ -45,10 +45,10 @@ class RichTextWidget(QLabel):
         self.setFixedHeight(config.WIDGET_SIZES['todo_text_line_height'])
         self.setWordWrap(False)
 
-        # Size Policy 설정: 너비는 최대값 존중(Maximum), 높이는 고정(Fixed)
-        # Maximum: 레이아웃이 지정한 최대 너비를 존중하면서 필요한 만큼만 확장
-        # Ignored 대신 Maximum을 사용하여 setMaximumWidth()가 정상 동작하도록 함
-        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        # Size Policy 설정: 너비는 자동 확장(Expanding), 높이는 고정(Fixed)
+        # Expanding: 레이아웃이 제공하는 공간을 최대한 활용하며 자동 확장
+        # setMinimumWidth()로 최소 너비만 제한하고, 나머지는 레이아웃이 자동 할당
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         # 링크 클릭 시그널 연결
         self.linkActivated.connect(self._on_link_activated)

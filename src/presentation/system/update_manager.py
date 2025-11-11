@@ -114,21 +114,21 @@ class UpdateManager:
         check_interval_hours를 무시하고 즉시 체크를 수행합니다.
 
         Note:
-            force_check()를 사용하여 강제 체크를 수행합니다.
+            is_force_check=True를 사용하여 interval을 무시하고 강제 체크를 수행합니다.
         """
         logger.info("수동 업데이트 체크 시작")
 
         # 건너뛴 버전 초기화 (수동 체크 시 모든 버전 알림)
         self.scheduler.reset_skipped_version()
 
-        # Worker 생성 및 시작
-        self.check_worker = UpdateCheckWorker(self.check_use_case)
+        # Worker 생성 및 시작 (is_force_check=True로 interval 무시)
+        self.check_worker = UpdateCheckWorker(self.check_use_case, is_force_check=True)
         self.check_worker.update_available.connect(self._on_update_available)
         self.check_worker.no_update.connect(self._on_no_update_manual)
         self.check_worker.check_failed.connect(self._on_check_failed)
         self.check_worker.start()
 
-        logger.info("수동 업데이트 체크 Worker 시작")
+        logger.info("수동 업데이트 체크 Worker 시작 (강제 체크 모드)")
 
     def _start_auto_check(self):
         """자동 업데이트 체크를 시작합니다 (내부 메서드).

@@ -36,11 +36,12 @@ class UpdateCheckWorker(QThread):
     no_update = pyqtSignal()
     check_failed = pyqtSignal(str)  # 에러 메시지
 
-    def __init__(self, check_use_case: 'CheckForUpdatesUseCase'):
+    def __init__(self, check_use_case: 'CheckForUpdatesUseCase', is_force_check: bool = False):
         """UpdateCheckWorker 초기화
 
         Args:
             check_use_case: 업데이트 체크 Use Case
+            is_force_check: 강제 체크 여부 (True = 24시간 interval 무시)
 
         Raises:
             TypeError: check_use_case가 CheckForUpdatesUseCase가 아닌 경우
@@ -57,7 +58,8 @@ class UpdateCheckWorker(QThread):
             )
 
         self.check_use_case = check_use_case
-        logger.info("UpdateCheckWorker 초기화")
+        self.is_force_check = is_force_check
+        logger.info(f"UpdateCheckWorker 초기화 (force_check={is_force_check})")
 
     def run(self):
         """백그라운드에서 업데이트 체크를 실행합니다.
@@ -66,7 +68,7 @@ class UpdateCheckWorker(QThread):
         이 메서드는 별도의 스레드에서 실행되므로 UI를 차단하지 않습니다.
 
         작업 흐름:
-        1. CheckForUpdatesUseCase.execute() 호출
+        1. is_force_check 플래그에 따라 force_check() 또는 execute() 호출
         2. 결과에 따라 적절한 시그널 발생
         3. 예외 발생 시 check_failed 시그널 발생
 
@@ -74,10 +76,15 @@ class UpdateCheckWorker(QThread):
             이 메서드는 직접 호출하지 말고 start()를 호출하세요.
         """
         try:
-            logger.info("백그라운드 업데이트 체크 시작...")
+            logger.info(f"백그라운드 업데이트 체크 시작... (force_check={self.is_force_check})")
 
-            # Use Case 실행
-            release = self.check_use_case.execute()
+            # Use Case 실행 (강제 체크 여부에 따라 다른 메서드 호출)
+            if self.is_force_check:
+                logger.info("강제 업데이트 체크 실행 (interval 무시)")
+                release = self.check_use_case.force_check()
+            else:
+                logger.info("일반 업데이트 체크 실행 (interval 확인)")
+                release = self.check_use_case.execute()
 
             if release:
                 logger.info(f"업데이트 발견: {release.version}")

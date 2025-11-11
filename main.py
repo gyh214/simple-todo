@@ -362,6 +362,7 @@ def main():
     # Phase 6: UpdateManager 생성 및 주입 (선택적)
     try:
         from src.presentation.system.update_manager import UpdateManager
+        from src.domain.value_objects.app_version import AppVersion
 
         update_manager = UpdateManager(
             parent_window=window,
@@ -369,7 +370,7 @@ def main():
             check_use_case=Container.resolve(ServiceNames.CHECK_FOR_UPDATES_USE_CASE),
             download_use_case=Container.resolve(ServiceNames.DOWNLOAD_UPDATE_USE_CASE),
             install_use_case=Container.resolve(ServiceNames.INSTALL_UPDATE_USE_CASE),
-            current_version=config.APP_VERSION
+            current_version=AppVersion.from_string(config.APP_VERSION)
         )
 
         # UpdateManager를 MainWindow에 설정

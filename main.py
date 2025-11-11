@@ -13,8 +13,16 @@ from src.core.container import Container, ServiceNames
 from src.presentation.ui.main_window import MainWindow
 from src.infrastructure.repositories.todo_repository_impl import TodoRepositoryImpl
 
-# 로그 디렉토리 생성
-LOG_DIR = Path(__file__).parent / "logs"
+# PyInstaller 환경에서도 안전한 로그 디렉토리 설정
+# PyInstaller: sys.executable는 exe 위치를 나타냄
+# 일반 Python: sys.executable는 python.exe 위치를 나타냄 (사용 안 함)
+if getattr(sys, 'frozen', False):
+    # PyInstaller로 빌드된 실행 파일인 경우
+    LOG_DIR = Path(sys.executable).parent / "logs"
+else:
+    # 일반 Python 스크립트로 실행된 경우 (개발 환경)
+    LOG_DIR = Path(__file__).parent / "logs"
+
 LOG_DIR.mkdir(exist_ok=True)
 
 # 로그 파일명 (타임스탬프 포함)
@@ -35,6 +43,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info(f"=== {config.APP_NAME} 시작 ===")
 logger.info(f"로그 파일: {LOG_FILE}")
+logger.info(f"PyInstaller 환경: {getattr(sys, 'frozen', False)}")
+
+
+def setup_global_exception_handler():
+    """
+    전역 예외 핸들러 설정
+
+    처리되지 않은 예외를 로그에 기록하고 사용자에게 알림.
+    프로그램 크래시 시에도 로그 파일에 스택 트레이스가 남아 디버깅 용이.
+    """
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        """처리되지 않은 예외를 처리하는 핸들러"""
+        if issubclass(exc_type, KeyboardInterrupt):
+            # Ctrl+C는 정상 종료이므로 로그하지 않음
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+
+        # 예외를 로그에 기록 (전체 스택 트레이스 포함)
+        logger.critical(
+            "처리되지 않은 예외 발생",
+            exc_info=(exc_type, exc_value, exc_traceback)
+        )
+
+    sys.excepthook = handle_exception
 
 
 def initialize_infrastructure_layer():
@@ -270,6 +302,9 @@ def main():
     """애플리케이션 진입점"""
     from PyQt6.QtWidgets import QMessageBox
     from src.presentation.system.single_instance import SingleInstanceManager
+
+    # 전역 예외 핸들러 설정 (프로그램 크래시 시 로그 기록)
+    setup_global_exception_handler()
 
     app = QApplication(sys.argv)
 

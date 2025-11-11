@@ -218,26 +218,35 @@ class UpdateManager:
         Args:
             release: 표시할 릴리스 정보
         """
-        dialog = UpdateAvailableDialog(
-            self.parent_window,
-            release,
-            self.current_version
-        )
-        dialog.exec()
+        try:
+            dialog = UpdateAvailableDialog(
+                self.parent_window,
+                release,
+                self.current_version
+            )
+            dialog.exec()
 
-        # 사용자 선택 처리
-        choice = dialog.get_user_choice()
+            # 사용자 선택 처리
+            choice = dialog.get_user_choice()
 
-        if choice == "update":
-            # 업데이트 시작
-            self._start_download(release)
-        elif choice == "skip":
-            # 이 버전 건너뛰기
-            logger.info(f"버전 {release.version} 건너뛰기 설정")
-            self.scheduler.skip_version(release.version)
-        else:
-            # 나중에
-            logger.info("업데이트 나중에")
+            if choice == "update":
+                # 업데이트 시작
+                self._start_download(release)
+            elif choice == "skip":
+                # 이 버전 건너뛰기
+                logger.info(f"버전 {release.version} 건너뛰기 설정")
+                self.scheduler.skip_version(release.version)
+            else:
+                # 나중에
+                logger.info("업데이트 나중에")
+
+        except Exception as e:
+            logger.error(f"업데이트 알림 다이얼로그 표시 실패: {e}", exc_info=True)
+            QMessageBox.critical(
+                self.parent_window,
+                "업데이트 오류",
+                f"업데이트 알림을 표시할 수 없습니다.\n\n{str(e)}"
+            )
 
     def _start_download(self, release: 'Release'):
         """다운로드를 시작합니다.

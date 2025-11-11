@@ -3,7 +3,11 @@
 Simple ToDo 애플리케이션 진입점
 """
 import sys
+import argparse
 import logging
+import tempfile
+import atexit
+import shutil
 from pathlib import Path
 from datetime import datetime
 from PyQt6.QtWidgets import QApplication
@@ -13,20 +17,49 @@ from src.core.container import Container, ServiceNames
 from src.presentation.ui.main_window import MainWindow
 from src.infrastructure.repositories.todo_repository_impl import TodoRepositoryImpl
 
-# PyInstaller 환경에서도 안전한 로그 디렉토리 설정
-# PyInstaller: sys.executable는 exe 위치를 나타냄
-# 일반 Python: sys.executable는 python.exe 위치를 나타냄 (사용 안 함)
+
+def parse_arguments():
+    """커맨드라인 인자 파싱"""
+    parser = argparse.ArgumentParser(description='Simple ToDo Application')
+    parser.add_argument('--debug', action='store_true',
+                       help='디버그 모드: 로그 파일을 exe 폴더에 유지')
+    return parser.parse_args()
+
+
+# 커맨드라인 인자 파싱
+args = parse_arguments()
+DEBUG_MODE = args.debug
+
+# 로그 디렉토리 및 파일 설정
 if getattr(sys, 'frozen', False):
     # PyInstaller로 빌드된 실행 파일인 경우
-    LOG_DIR = Path(sys.executable).parent / "logs"
+    if DEBUG_MODE:
+        # 디버그 모드: exe 폴더의 logs에 영구 로그 저장
+        LOG_DIR = Path(sys.executable).parent / "logs"
+        LOG_DIR.mkdir(exist_ok=True)
+        LOG_FILE = LOG_DIR / f"app_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        TEMP_LOG_DIR = None  # 임시 폴더 정리 필요 없음
+    else:
+        # 일반 모드: temp 폴더에 임시 로그 생성 (종료 시 자동 삭제)
+        TEMP_LOG_DIR = tempfile.mkdtemp(prefix='SimpleTodo_')
+        LOG_DIR = Path(TEMP_LOG_DIR)
+        LOG_FILE = LOG_DIR / "app.log"
+
+        # 종료 시 임시 로그 폴더 정리
+        def cleanup_temp_logs():
+            try:
+                if TEMP_LOG_DIR and Path(TEMP_LOG_DIR).exists():
+                    shutil.rmtree(TEMP_LOG_DIR, ignore_errors=True)
+            except Exception:
+                pass
+
+        atexit.register(cleanup_temp_logs)
 else:
-    # 일반 Python 스크립트로 실행된 경우 (개발 환경)
+    # 개발 환경: 항상 프로젝트 폴더에 logs 생성
     LOG_DIR = Path(__file__).parent / "logs"
-
-LOG_DIR.mkdir(exist_ok=True)
-
-# 로그 파일명 (타임스탬프 포함)
-LOG_FILE = LOG_DIR / f"app_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    LOG_DIR.mkdir(exist_ok=True)
+    LOG_FILE = LOG_DIR / f"app_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    TEMP_LOG_DIR = None
 
 # 로깅 설정 (파일 + 콘솔)
 logging.basicConfig(
@@ -44,6 +77,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"=== {config.APP_NAME} 시작 ===")
 logger.info(f"로그 파일: {LOG_FILE}")
 logger.info(f"PyInstaller 환경: {getattr(sys, 'frozen', False)}")
+logger.info(f"디버그 모드: {DEBUG_MODE}")
 
 
 def setup_global_exception_handler():

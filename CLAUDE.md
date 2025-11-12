@@ -402,6 +402,85 @@ git checkout main && git merge develop && git push origin main
 
 ---
 
+## 📝 GitHub Release Notes Writing Principle
+
+**CRITICAL RULE**: GitHub Release notes MUST ALWAYS be written from the **user's perspective**, NOT from a technical/developer perspective.
+
+### Release Notes Writing Standards
+
+**Golden Rule**: Write as if you're explaining changes to a non-technical user who just wants to know "what's different for me?"
+
+#### ✅ User Perspective (REQUIRED)
+- Focus on improvements the user will **experience**
+- Use friendly, non-technical language
+- Explain **why** changes matter to the user
+- Example: "App now starts 20% faster" (not "Optimized initialization routine")
+
+#### ❌ Developer Perspective (FORBIDDEN)
+- Technical implementation details
+- Code structure changes
+- Internal refactoring
+- File names or function changes
+- Example: "Modified UPDATE_CHECK_INTERVAL_HOURS config" (too technical)
+
+#### 🔄 Translation Guide: Technical → User Language
+
+| Technical | User-Friendly |
+|-----------|--------------|
+| Updated UPDATE_CHECK_INTERVAL_HOURS | Improved update check efficiency |
+| Added security section to README | Enhanced transparency about data privacy |
+| Windows Defender warning notice | Windows security warning guidance |
+| Performance optimization | App runs faster/smoother |
+| Bug fix in data serialization | Fixed data saving issue |
+| Refactored architecture | Internal improvements (if mentioning) |
+
+### Release Notes Template
+
+```markdown
+## v[VERSION] — [User-friendly one-liner]
+
+### ✨ What's New
+- [User-focused benefit 1]
+- [User-focused benefit 2]
+
+### 🐛 Fixed
+- [What problem is now solved]
+
+### 📝 Important Notes
+- [Info users should know]
+
+### 💾 Download
+[Latest Release](https://github.com/gyh214/simple-todo/releases/latest)
+```
+
+### Example: Good Release Notes
+
+```markdown
+## v2.6.45 — Performance boost & better security transparency
+
+### ✨ What's New
+- Reduced battery usage: App now checks for updates once a day instead of every hour
+- Security information added: See exactly what data is kept private
+- Windows security warning guide: New users won't be confused by security alerts
+
+### 📝 For New Users
+Check README.md's "Security & Privacy" section to learn how your data stays safe.
+```
+
+### Example: Bad Release Notes (Developer Perspective)
+
+```markdown
+## v2.6.45 — Technical Updates
+
+### Changes
+- Modified UPDATE_CHECK_INTERVAL_HOURS from 1 to 24
+- Added security section to README.md
+- Updated CONTRIBUTING.md with release guidelines
+- Modified CLAUDE.md configuration
+```
+
+---
+
 ## Document Management Rules
 
 **CRITICAL**: Place internal documentation in `.moai/` hierarchy ONLY, never in project root (except README.md, CHANGELOG.md, CONTRIBUTING.md). For detailed guidance: Skill("moai-alfred-document-management")

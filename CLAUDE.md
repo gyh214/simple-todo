@@ -406,6 +406,8 @@ git checkout main && git merge develop && git push origin main
 
 **CRITICAL RULE**: GitHub Release notes MUST ALWAYS be written from the **user's perspective**, NOT from a technical/developer perspective.
 
+> **Language**: Korean is recommended. English is also supported.
+
 ### Release Notes Writing Standards
 
 **Golden Rule**: Write as if you're explaining changes to a non-technical user who just wants to know "what's different for me?"
@@ -453,7 +455,7 @@ git checkout main && git merge develop && git push origin main
 [Latest Release](https://github.com/gyh214/simple-todo/releases/latest)
 ```
 
-### Example: Good Release Notes
+### Example: Good Release Notes (English)
 
 ```markdown
 ## v2.6.45 — Performance boost & better security transparency
@@ -465,6 +467,20 @@ git checkout main && git merge develop && git push origin main
 
 ### 📝 For New Users
 Check README.md's "Security & Privacy" section to learn how your data stays safe.
+```
+
+### 예시: 좋은 릴리스 노트 (한국어)
+
+```markdown
+## v2.6.45 — 성능 개선 및 보안 투명성 강화
+
+### ✨ 개선사항
+- 배터리 사용량 감소: 업데이트 확인이 매시간에서 하루에 한 번으로 변경됩니다
+- 보안 정보 공개: README.md의 "🔒 보안 & 프라이버시" 섹션에서 확인하세요
+- Windows 보안 경고 안내: 새 사용자도 쉽게 이해할 수 있습니다
+
+### 📱 새 사용자를 위한 안내
+README.md의 "🔒 보안 & 프라이버시" 섹션을 확인하세요.
 ```
 
 ### Example: Bad Release Notes (Developer Perspective)

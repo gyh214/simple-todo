@@ -56,3 +56,4 @@ node_modules/
 .tscache/
 *.egg
 .env/
+a.txt

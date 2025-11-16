@@ -1,6 +1,0 @@
-DEBUG: recurrence.weekdays=frozenset({0, 2, 4}), frequency=weekly
-DEBUG: bool(recurrence.weekdays)=True, frequency=='weekly'=True
-DEBUG: Setting weekdays_container to True
-DEBUG: recurrence.weekdays=frozenset({0, 2, 4}), frequency=weekly
-DEBUG: bool(recurrence.weekdays)=True, frequency=='weekly'=True
-DEBUG: Setting weekdays_container to True

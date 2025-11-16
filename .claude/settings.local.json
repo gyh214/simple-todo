@@ -19,7 +19,8 @@
       "Bash(cd:*)",
       "Bash(dir /b /s *.png *.jpg *.jpeg *.gif 2)",
       "Bash(dir:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

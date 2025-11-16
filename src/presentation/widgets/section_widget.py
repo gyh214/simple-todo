@@ -38,6 +38,7 @@ class SectionWidget(QWidget):
     todo_deleted = pyqtSignal(str)
     todo_check_toggled = pyqtSignal(str, bool)
     todo_edit_requested = pyqtSignal(str)
+    todo_edit_with_selection_requested = pyqtSignal(object)  # Todo 객체 (하위할일이 있을 때)
     todo_reordered = pyqtSignal(str, int, str)  # (todo_id, new_position, section)
 
     # 하위 할일 시그널
@@ -138,6 +139,7 @@ class SectionWidget(QWidget):
         todo_item.delete_requested.connect(self.todo_deleted.emit)
         todo_item.check_toggled.connect(self.todo_check_toggled.emit)
         todo_item.edit_requested.connect(self.todo_edit_requested.emit)
+        todo_item.edit_with_selection_requested.connect(self.todo_edit_with_selection_requested.emit)
 
         # 하위 할일 시그널 연결 (릴레이)
         todo_item.subtask_toggled.connect(self.subtask_toggled.emit)

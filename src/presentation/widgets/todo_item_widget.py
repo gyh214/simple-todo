@@ -38,6 +38,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
     delete_requested = pyqtSignal(str)
     check_toggled = pyqtSignal(str, bool)
     edit_requested = pyqtSignal(str)
+    edit_with_selection_requested = pyqtSignal(object)  # Todo 객체 전달 (하위할일이 있을 때)
 
     # 하위 할일 시그널
     subtask_toggled = pyqtSignal(object, object)  # parent_id, subtask_id
@@ -491,8 +492,14 @@ class TodoItemWidget(QWidget, DraggableMixin):
             event: 마우스 이벤트
         """
         if event.button() == Qt.MouseButton.LeftButton:
-            self.edit_requested.emit(str(self.todo.id))
-        super().mouseDoubleClickEvent(event)
+            # 하위할일이 있으면 선택 다이얼로그 요청, 없으면 바로 편집
+            if self.todo and self.todo.subtasks:
+                self.edit_with_selection_requested.emit(self.todo)
+            else:
+                self.edit_requested.emit(str(self.todo.id))
+        # super().mouseDoubleClickEvent(event)를 호출하지 않음
+        # 시그널 처리 중 위젯이 삭제될 수 있어 RuntimeError 방지
+        event.accept()
 
     def enterEvent(self, event) -> None:
         """마우스 진입 이벤트 (호버 효과)

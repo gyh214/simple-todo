@@ -30,7 +30,7 @@ BACKUP_DIR.mkdir(exist_ok=True)
 
 # 애플리케이션 기본 설정
 APP_NAME = "Simple ToDo"
-APP_VERSION = "2.6.45"
+APP_VERSION = "2.7.0"
 
 # GitHub Repository 정보 (자동 업데이트용)
 GITHUB_REPO_OWNER = "gyh214"
@@ -41,9 +41,9 @@ GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO
 UPDATE_CHECK_INTERVAL_HOURS = 24  # 24시간(1일)마다 업데이트 확인
 
 # 윈도우 설정
-WINDOW_WIDTH = 420
+WINDOW_WIDTH = 460  # 기본 너비 확대 (삭제 버튼이 잘리지 않도록)
 WINDOW_HEIGHT = 600
-MIN_WINDOW_WIDTH = 420  # 텍스트 최소 너비(220px) + 좌우 여백(200px) 보장
+MIN_WINDOW_WIDTH = 460  # 기본 너비 확대 (삭제 버튼이 잘리지 않도록)  # 텍스트 최소 너비(220px) + 좌우 여백(200px) 보장
 MIN_WINDOW_HEIGHT = 400
 
 # 데이터 기본 설정
@@ -159,19 +159,19 @@ WIDGET_SIZES = {
     'delete_btn_size': (24, 24),
     'splitter_handle_width': 12,
     'footer_min_height': 28,
-    'edit_dialog_size': (450, 800),  # 스크롤 가능하도록 800으로 설정
+    'edit_dialog_size': (600, 800),  # 크기 확대 (450 -> 600), 사용자 리사이즈 가능
     'content_edit_height_min': 120,
     'content_edit_height_max': 150,
-    'backup_dialog_size': (520, 680),
+    'backup_dialog_size': (650, 700),  # 크기 확대 (520x680 -> 650x700), 사용자 리사이즈 가능
     'manage_btn_size': (60, 24),
     'todo_text_line_height': 22,  # RichTextWidget 1줄 고정 높이 (base font 13px * 1.4 line-height + padding)
     'expand_btn_size': 16,  # 펼치기/접기 버튼 크기
     'subtask_indent': 24,  # 하위 할일 들여쓰기
 }
 
-# 레이아웃 동적 계산 설정 (윈도우 기본 너비 420px 기준)
+# 레이아웃 동적 계산 설정 (윈도우 기본 너비 460px 기준)
 LAYOUT_SIZES = {
-    'window_default_width': 420,
+    'window_default_width': 460,
     'todo_text_base_max_width': 220,    # TODO 텍스트 최소 너비 (반응형: 윈도우 확장 시 자동 확장)
     'subtask_text_max_width': 196,      # SubTask 텍스트 최소 너비 (220 - 24 들여쓰기, 반응형)
     'left_margin_total': 52,            # 좌측 여백 합계 (드래그 14 + 체크박스 18 + 여백 20)

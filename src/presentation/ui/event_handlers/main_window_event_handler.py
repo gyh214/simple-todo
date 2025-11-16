@@ -25,7 +25,8 @@ from src.domain.value_objects.recurrence_rule import RecurrenceRule
 from src.domain.services.todo_search_service import TodoSearchService
 from src.infrastructure.utils.debounce_manager import DebounceManager
 from src.presentation.dialogs.backup_manager_dialog import BackupManagerDialog
-from src.presentation.dialogs.edit_dialog import SubTaskEditDialog
+from src.presentation.dialogs.edit_dialog import SubTaskEditDialog, EditSelectionDialog
+from src.presentation.dialogs.subtask_list_dialog import SubTaskListDialog
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +97,13 @@ class MainWindowEventHandler:
         self.in_progress_section.todo_deleted.connect(self.on_todo_delete)
         self.in_progress_section.todo_check_toggled.connect(self.on_todo_check_toggled)
         self.in_progress_section.todo_edit_requested.connect(self.on_todo_edit)
+        self.in_progress_section.todo_edit_with_selection_requested.connect(self.on_todo_edit_with_selection)
         self.in_progress_section.todo_reordered.connect(self.on_todo_reorder)
 
         self.completed_section.todo_deleted.connect(self.on_todo_delete)
         self.completed_section.todo_check_toggled.connect(self.on_todo_check_toggled)
         self.completed_section.todo_edit_requested.connect(self.on_todo_edit)
+        self.completed_section.todo_edit_with_selection_requested.connect(self.on_todo_edit_with_selection)
         self.completed_section.todo_reordered.connect(self.on_todo_reorder)
 
         # 섹션: 하위 할일 이벤트 (SectionWidget이 TodoItemWidget 시그널을 전파함)
@@ -396,7 +399,9 @@ class MainWindowEventHandler:
                 str(todo.content),
                 due_date_str,
                 todo.subtasks,
-                todo.recurrence  # 반복 규칙 전달
+                todo.recurrence,  # 반복 규칙 전달
+                todo,  # TODO 객체 전달 (하위 할일 관리용)
+                self.todo_service  # 서비스 전달
             )
 
             # 4. 다이얼로그 표시 (모달)
@@ -404,6 +409,39 @@ class MainWindowEventHandler:
 
         except Exception as e:
             logger.error(f"Failed to open edit dialog: {e}", exc_info=True)
+
+    def on_todo_edit_with_selection(self, todo: Todo) -> None:
+        """하위할일이 있는 TODO 편집 핸들러 (선택 다이얼로그 표시)
+
+        Args:
+            todo: Todo 객체
+        """
+        try:
+            # 1. EditSelectionDialog 표시
+            selection_dialog = EditSelectionDialog(self.main_window)
+            result = selection_dialog.exec()
+
+            if result != QDialog.DialogCode.Accepted:
+                # 취소됨
+                return
+
+            selection = selection_dialog.get_selection()
+
+            if selection == "main":
+                # 메인 할일 편집 - 기존 on_todo_edit 호출
+                self.on_todo_edit(str(todo.id))
+            elif selection == "subtask":
+                # 하위 할일 편집 - SubTaskListDialog 호출
+                if todo.subtasks:
+                    list_dialog = SubTaskListDialog(todo, self.todo_service, self.main_window)
+                    list_dialog.subtasks_updated.connect(self.load_todos)
+                    if list_dialog.exec() == QDialog.DialogCode.Accepted:
+                        self.load_todos()  # 목록 새로고침
+                else:
+                    logger.warning(f"No subtasks found for todo: {todo.id}")
+
+        except Exception as e:
+            logger.error(f"Failed to handle edit with selection: {e}", exc_info=True)
 
     def on_edit_save(self, todo_id: str, content: str, due_date: str) -> None:
         """편집/추가 저장 핸들러

@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QPushButton,
                             QScrollArea, QCheckBox, QListWidget, QListWidgetItem,
                             QComboBox, QMessageBox, QFrame)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
 import config
 from ...domain.entities.subtask import SubTask
@@ -17,6 +17,150 @@ from ...domain.value_objects.todo_id import TodoId
 from ...domain.value_objects.recurrence_rule import RecurrenceRule
 from .date_picker_dialog import DatePickerDialog
 from ..utils.color_utils import create_dialog_palette, apply_palette_recursive
+from .subtask_list_dialog import SubTaskListDialog
+
+if TYPE_CHECKING:
+    from ...domain.entities.todo import Todo
+    from ...application.services.todo_service import TodoService
+
+
+class EditSelectionDialog(QDialog):
+    """메인할일 편집 또는 하위할일 편집 선택 다이얼로그"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.selection = None  # "main" 또는 "subtask"
+        self.setModal(True)
+        self.setWindowTitle("편집 대상 선택")
+        self.setFixedSize(350, 180)
+        self._palette_applied = False
+        self._setup_ui()
+        self._apply_styles()
+
+    def _setup_ui(self):
+        """UI 구성"""
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(20)
+
+        # 제목
+        title_label = QLabel("편집 대상 선택")
+        title_label.setObjectName("titleLabel")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_label)
+
+        # 설명
+        desc_label = QLabel("어떤 항목을 편집하시겠습니까?")
+        desc_label.setObjectName("descLabel")
+        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(desc_label)
+
+        # 버튼 영역
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(12)
+
+        # 메인 할일 편집 버튼
+        self.main_btn = QPushButton("메인 할일 편집")
+        self.main_btn.setObjectName("mainEditBtn")
+        self.main_btn.clicked.connect(self._on_main_selected)
+        button_layout.addWidget(self.main_btn)
+
+        # 하위 할일 편집 버튼
+        self.subtask_btn = QPushButton("하위 할일 편집")
+        self.subtask_btn.setObjectName("subtaskEditBtn")
+        self.subtask_btn.clicked.connect(self._on_subtask_selected)
+        button_layout.addWidget(self.subtask_btn)
+
+        layout.addLayout(button_layout)
+
+    def _on_main_selected(self):
+        """메인 할일 편집 선택"""
+        self.selection = "main"
+        self.accept()
+
+    def _on_subtask_selected(self):
+        """하위 할일 편집 선택"""
+        self.selection = "subtask"
+        self.accept()
+
+    def get_selection(self) -> Optional[str]:
+        """선택 결과 반환"""
+        return self.selection
+
+    def showEvent(self, event):
+        """다이얼로그 표시 시 QPalette 적용"""
+        super().showEvent(event)
+        if not self._palette_applied:
+            palette = create_dialog_palette()
+            apply_palette_recursive(self, palette)
+            self._palette_applied = True
+
+    def keyPressEvent(self, event):
+        """ESC로 닫기"""
+        if event.key() == Qt.Key.Key_Escape:
+            self.reject()
+        else:
+            super().keyPressEvent(event)
+
+    def _apply_styles(self):
+        """스타일 적용"""
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {config.COLORS['secondary_bg']};
+                border-radius: {config.UI_METRICS['border_radius']['xl']}px;
+            }}
+
+            QLabel#titleLabel {{
+                color: {config.COLORS['text_primary']};
+                font-size: {config.FONT_SIZES['xl']}px;
+                font-weight: 600;
+            }}
+
+            QLabel#descLabel {{
+                color: {config.COLORS['text_secondary']};
+                font-size: {config.FONT_SIZES['base']}px;
+            }}
+
+            QPushButton#mainEditBtn {{
+                background: {config.COLORS['accent']};
+                color: white;
+                border: none;
+                border-radius: {config.UI_METRICS['border_radius']['lg']}px;
+                padding: {config.UI_METRICS['padding']['md'][0]}px {config.UI_METRICS['padding']['md'][1]}px;
+                font-weight: 500;
+                font-size: {config.FONT_SIZES['base']}px;
+                min-width: 120px;
+            }}
+
+            QPushButton#mainEditBtn:hover {{
+                background: {config.COLORS['accent_hover']};
+            }}
+
+            QPushButton#mainEditBtn:pressed {{
+                background: #B56B4A;
+            }}
+
+            QPushButton#subtaskEditBtn {{
+                background: transparent;
+                border: {config.UI_METRICS['border_width']['thin']}px solid {config.COLORS['border']};
+                border-radius: {config.UI_METRICS['border_radius']['lg']}px;
+                padding: {config.UI_METRICS['padding']['md'][0]}px {config.UI_METRICS['padding']['md'][1]}px;
+                color: {config.COLORS['text_secondary']};
+                font-size: {config.FONT_SIZES['base']}px;
+                min-width: 120px;
+            }}
+
+            QPushButton#subtaskEditBtn:hover {{
+                border-color: {config.COLORS['accent']};
+                color: {config.COLORS['text_primary']};
+            }}
+
+            QPushButton#subtaskEditBtn:pressed {{
+                background: rgba(64, 64, 64, 0.1);
+            }}
+        """)
 
 
 class CollapsibleSection(QWidget):
@@ -111,6 +255,8 @@ class EditDialog(QDialog):
         super().__init__(parent)
         self.todo_id: Optional[str] = None
         self.subtasks: List[SubTask] = []  # 하위 할일 리스트
+        self.current_todo: Optional["Todo"] = None  # 현재 편집 중인 TODO 객체
+        self.todo_service: Optional["TodoService"] = None  # TODO 서비스
         self._palette_applied = False  # palette 적용 여부 플래그
         self.setup_ui()
         self.apply_styles()
@@ -118,7 +264,10 @@ class EditDialog(QDialog):
         # 모달 설정
         self.setModal(True)
         self.setWindowTitle("TODO 편집")
-        self.setFixedSize(*config.WIDGET_SIZES['edit_dialog_size'])
+        # 크기 조절 가능하도록 setMinimumSize 사용 (setFixedSize 대신)
+        self.setMinimumSize(*config.WIDGET_SIZES['edit_dialog_size'])
+        # 초기 크기 설정
+        self.resize(*config.WIDGET_SIZES['edit_dialog_size'])
 
     def setup_ui(self):
         """UI 구성"""
@@ -180,22 +329,11 @@ class EditDialog(QDialog):
         self.selected_date_label.setObjectName("selectedDateLabel")
         content_layout.addWidget(self.selected_date_label)
 
-        # 하위 할일 섹션 (접을 수 있는 섹션)
-        self.subtasks_section = CollapsibleSection("하위 할일", "0/0 완료")
-        content_layout.addWidget(self.subtasks_section)
-
-        # 하위 할일 추가 버튼
-        add_subtask_btn = QPushButton("+ 하위 할일 추가")
-        add_subtask_btn.setObjectName("addSubtaskBtn")
-        add_subtask_btn.clicked.connect(self._on_add_subtask)
-        self.subtasks_section.add_content(add_subtask_btn)
-
-        # 하위 할일 리스트
-        self.subtasks_list = QListWidget()
-        self.subtasks_list.setObjectName("subtasksList")
-        self.subtasks_list.setMinimumHeight(100)
-        self.subtasks_list.setMaximumHeight(300)  # 200 → 300으로 증가하여 더 많은 하위 할일 표시
-        self.subtasks_section.add_content(self.subtasks_list)
+        # 하위 할일 관리 버튼 (단일 버튼으로 간소화)
+        self.manage_subtasks_btn = QPushButton("하위 할일 추가/관리 (0개)")
+        self.manage_subtasks_btn.setObjectName("manageSubtasksBtn")
+        self.manage_subtasks_btn.clicked.connect(self._on_manage_subtasks)
+        content_layout.addWidget(self.manage_subtasks_btn)
 
         # 반복 설정 섹션 (접을 수 있는 구조)
         self.recurrence_section = CollapsibleSection("반복 설정")
@@ -294,9 +432,12 @@ class EditDialog(QDialog):
 
         self.recurrence_section.add_content(recurrence_container)
 
+        # 스크롤 영역에 stretch 추가하여 동적 확장 지원
+        content_layout.addStretch(1)
+
         # 스크롤 영역 설정
         scroll_area.setWidget(content_widget)
-        main_layout.addWidget(scroll_area)
+        main_layout.addWidget(scroll_area, 1)  # stretch factor 1로 확장 가능
 
         # === 버튼 영역 (하단 고정) ===
         button_layout = QHBoxLayout()
@@ -399,7 +540,7 @@ class EditDialog(QDialog):
         else:
             self.recurrence_description.setText("")
 
-    def set_todo(self, todo_id: Optional[str], content: str = "", due_date: Optional[str] = None, subtasks: List[SubTask] = None, recurrence: Optional[RecurrenceRule] = None):
+    def set_todo(self, todo_id: Optional[str], content: str = "", due_date: Optional[str] = None, subtasks: List[SubTask] = None, recurrence: Optional[RecurrenceRule] = None, todo: Optional["Todo"] = None, todo_service: Optional["TodoService"] = None):
         """TODO 정보 설정
 
         Args:
@@ -408,9 +549,13 @@ class EditDialog(QDialog):
             due_date: 납기일 (ISO 문자열, None 가능)
             subtasks: 하위 할일 리스트 (None 가능)
             recurrence: 반복 규칙 (RecurrenceRule 또는 None)
+            todo: 편집 중인 TODO 객체 (하위 할일 관리에 사용)
+            todo_service: TODO 서비스 (하위 할일 저장에 사용)
         """
         self.todo_id = todo_id
         self.subtasks = subtasks if subtasks else []
+        self.current_todo = todo  # 현재 편집 중인 TODO 객체 저장
+        self.todo_service = todo_service  # 서비스 저장
 
         # 타이틀 설정 (신규/수정 구분)
         if todo_id is None:
@@ -449,8 +594,8 @@ class EditDialog(QDialog):
                 self.calendar.setSelectedDate(QDate.currentDate())
                 self._update_date_label(None)
 
-        # 하위 할일 UI 업데이트
-        self._update_subtasks_ui()
+        # 하위 할일 버튼 텍스트 업데이트
+        self._update_subtask_button_text()
 
         # 반복 설정
         if recurrence:
@@ -582,107 +727,38 @@ class EditDialog(QDialog):
         # 다이얼로그 닫기
         self.accept()
 
-    def _update_subtasks_ui(self):
-        """하위 할일 UI 업데이트"""
-        # 리스트 클리어
-        self.subtasks_list.clear()
+    def _update_subtask_button_text(self):
+        """하위 할일 버튼 텍스트 업데이트"""
+        count = len(self.subtasks)
+        self.manage_subtasks_btn.setText(f"하위 할일 추가/관리 ({count}개)")
 
-        # 하위 할일 추가
-        for subtask in self.subtasks:
-            self._add_subtask_item(subtask)
+    def _on_manage_subtasks(self):
+        """하위 할일 관리 다이얼로그 열기"""
+        if not self.current_todo or not self.todo_service:
+            # 신규 추가 모드이거나 서비스가 없는 경우
+            QMessageBox.information(
+                self,
+                "안내",
+                "하위 할일 관리는 기존 할일을 편집할 때만 사용할 수 있습니다.\n저장 후 다시 편집하여 하위 할일을 추가해주세요."
+            )
+            return
+        
+        # SubTaskListDialog 열기
+        dialog = SubTaskListDialog(self.current_todo, self.todo_service, self)
+        dialog.subtasks_updated.connect(self._on_subtasks_updated)
+        dialog.exec()
 
-        # 완료 카운트 업데이트
-        self._update_subtasks_count()
-
-    def _add_subtask_item(self, subtask: SubTask):
-        """하위 할일 아이템을 리스트에 추가"""
-        # 아이템 위젯 생성
-        item_widget = QWidget()
-        item_layout = QHBoxLayout(item_widget)
-        item_layout.setContentsMargins(5, 5, 5, 5)
-        item_layout.setSpacing(8)
-
-        # 체크박스
-        checkbox = QCheckBox()
-        checkbox.setChecked(subtask.completed)
-        checkbox.setObjectName("subtaskCheckbox")
-        checkbox.stateChanged.connect(lambda state, st=subtask: self._on_subtask_toggled(st, state))
-        item_layout.addWidget(checkbox)
-
-        # 내용 라벨
-        content_label = QLabel(str(subtask.content))
-        content_label.setObjectName("subtaskContentLabel")
-        if subtask.completed:
-            content_label.setStyleSheet(f"text-decoration: line-through; color: {config.COLORS['text_disabled']};")
-        else:
-            content_label.setStyleSheet(f"color: {config.COLORS['text_primary']};")
-        item_layout.addWidget(content_label, 1)
-
-        # 납기일 표시 (있는 경우)
-        if subtask.due_date:
-            due_label = QLabel(subtask.due_date.format_display_text())
-            due_label.setObjectName("subtaskDueLabel")
-            due_label.setStyleSheet(f"color: {config.COLORS['text_secondary']}; font-size: {config.FONT_SIZES['xs']}px;")
-            item_layout.addWidget(due_label)
-
-        # 편집 버튼
-        edit_btn = QPushButton("편집")
-        edit_btn.setObjectName("subtaskEditBtn")
-        edit_btn.clicked.connect(lambda checked, st=subtask: self._on_edit_subtask(st))
-        item_layout.addWidget(edit_btn)
-
-        # 삭제 버튼
-        delete_btn = QPushButton("삭제")
-        delete_btn.setObjectName("subtaskDeleteBtn")
-        delete_btn.clicked.connect(lambda checked, st=subtask: self._on_delete_subtask(st))
-        item_layout.addWidget(delete_btn)
-
-        # QListWidget에 추가
-        list_item = QListWidgetItem()
-        list_item.setSizeHint(item_widget.sizeHint())
-        self.subtasks_list.addItem(list_item)
-        self.subtasks_list.setItemWidget(list_item, item_widget)
-
-    def _on_add_subtask(self):
-        """하위 할일 추가"""
-        # 간단한 다이얼로그 생성
-        dialog = SubTaskEditDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            content, due_date = dialog.get_data()
-            # 새로운 SubTask 생성
-            new_subtask = SubTask.create(content=content, due_date=due_date)
-            self.subtasks.append(new_subtask)
-            self._update_subtasks_ui()
-
-    def _on_edit_subtask(self, subtask: SubTask):
-        """하위 할일 편집"""
-        dialog = SubTaskEditDialog(self)
-        dialog.set_data(str(subtask.content), str(subtask.due_date) if subtask.due_date else None)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            content, due_date = dialog.get_data()
-            # SubTask 업데이트
-            from ...domain.value_objects.content import Content
-            from ...domain.value_objects.due_date import DueDate
-            subtask.update_content(Content(value=content))
-            subtask.set_due_date(DueDate.from_string(due_date) if due_date else None)
-            self._update_subtasks_ui()
-
-    def _on_delete_subtask(self, subtask: SubTask):
-        """하위 할일 삭제"""
-        # 리스트에서 제거
-        self.subtasks = [st for st in self.subtasks if st.id != subtask.id]
-        self._update_subtasks_ui()
-
-    def _on_subtask_toggled(self, subtask: SubTask, state: Qt.CheckState):
-        """하위 할일 체크박스 토글"""
-        subtask.completed = (state == Qt.CheckState.Checked)
-        self._update_subtasks_ui()
-
-    def _update_subtasks_count(self):
-        """하위 할일 완료 카운트 업데이트"""
-        completed_count = sum(1 for st in self.subtasks if st.completed)
-        total_count = len(self.subtasks)
-        self.subtasks_section.set_count_text(f"{completed_count}/{total_count} 완료")
+    def _on_subtasks_updated(self):
+        """SubTaskListDialog에서 하위 할일이 업데이트되었을 때"""
+        if self.current_todo:
+            # 저장소에서 최신 상태 조회
+            from src.core.container import Container, ServiceNames
+            repository = Container.resolve(ServiceNames.TODO_REPOSITORY)
+            updated_todo = repository.find_by_id(self.current_todo.id)
+            if updated_todo:
+                self.current_todo = updated_todo
+                self.subtasks = list(updated_todo.subtasks)
+                self._update_subtask_button_text()
 
     def get_subtasks(self) -> List[SubTask]:
         """하위 할일 리스트 반환"""
@@ -915,45 +991,22 @@ class EditDialog(QDialog):
             }}
 
             /* SubTasks Section */
-            QPushButton#addSubtaskBtn {{
+            QPushButton#manageSubtasksBtn {{
                 background: transparent;
-                border: {config.UI_METRICS['border_width']['thin']}px dashed {config.COLORS['border']};
+                border: {config.UI_METRICS['border_width']['thin']}px solid {config.COLORS['border']};
                 border-radius: {config.UI_METRICS['border_radius']['lg']}px;
                 padding: {config.UI_METRICS['padding']['md'][0]}px {config.UI_METRICS['padding']['md'][1]}px;
                 color: {config.COLORS['text_secondary']};
                 font-size: {config.FONT_SIZES['base']}px;
             }}
 
-            QPushButton#addSubtaskBtn:hover {{
+            QPushButton#manageSubtasksBtn:hover {{
                 border-color: {config.COLORS['accent']};
                 color: {config.COLORS['text_primary']};
             }}
 
-            QListWidget#subtasksList {{
-                background: {config.COLORS['card']};
-                border: {config.UI_METRICS['border_width']['thin']}px solid {config.COLORS['border']};
-                border-radius: {config.UI_METRICS['border_radius']['lg']}px;
-                padding: 5px;
-            }}
-
-            QPushButton#subtaskEditBtn, QPushButton#subtaskDeleteBtn {{
-                background: transparent;
-                border: {config.UI_METRICS['border_width']['thin']}px solid {config.COLORS['border']};
-                border-radius: {config.UI_METRICS['border_radius']['sm']}px;
-                padding: 4px 12px;
-                color: {config.COLORS['text_secondary']};
-                font-size: {config.FONT_SIZES['sm']}px;
-                min-width: 50px;
-            }}
-
-            QPushButton#subtaskEditBtn:hover {{
-                border-color: {config.COLORS['accent']};
-                color: {config.COLORS['text_primary']};
-            }}
-
-            QPushButton#subtaskDeleteBtn:hover {{
-                border-color: #ef5350;
-                color: #ef5350;
+            QPushButton#manageSubtasksBtn:pressed {{
+                background: rgba(64, 64, 64, 0.1);
             }}
 
             /* Recurrence Section */
@@ -1072,7 +1125,9 @@ class SubTaskEditDialog(QDialog):
         super().__init__(parent)
         self.setModal(True)
         self.setWindowTitle("하위 할일 편집")
-        self.setFixedSize(380, 300)
+        self.setMinimumSize(450, 450)
+        self.resize(450, 450)
+        self.setSizeGripEnabled(True)
         self._palette_applied = False  # palette 적용 여부 플래그
         self._setup_ui()
         self._apply_styles()
@@ -1099,9 +1154,8 @@ class SubTaskEditDialog(QDialog):
         self.content_edit = QTextEdit()
         self.content_edit.setObjectName("contentEdit")
         self.content_edit.setPlaceholderText("하위 할일 내용을 입력하세요...")
-        self.content_edit.setMinimumHeight(80)
-        self.content_edit.setMaximumHeight(100)
-        layout.addWidget(self.content_edit)
+        self.content_edit.setMinimumHeight(120)
+        layout.addWidget(self.content_edit, 1)  # stretch factor 1 for auto-expand
 
         # 날짜 입력 (간단 버전)
         date_label = QLabel("납기일 (선택)")

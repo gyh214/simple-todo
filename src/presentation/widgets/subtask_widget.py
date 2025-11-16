@@ -308,7 +308,9 @@ class SubTaskWidget(QWidget):
         """
         if event.button() == Qt.MouseButton.LeftButton:
             self.subtask_edit_requested.emit(self.parent_todo_id, self.subtask.id)
-        super().mouseDoubleClickEvent(event)
+        # super().mouseDoubleClickEvent(event)를 호출하지 않음
+        # 이벤트가 부모 위젯(TodoItemWidget)으로 전파되는 것을 방지
+        event.accept()
 
     def enterEvent(self, event) -> None:
         """마우스 진입 이벤트 (호버 효과)

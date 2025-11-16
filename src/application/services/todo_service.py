@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """TodoService - TODO CRUD 비즈니스 로직"""
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 import logging
+import json
+from pathlib import Path
 from ...domain.entities.todo import Todo
 from ...domain.entities.subtask import SubTask
 from ...domain.value_objects.todo_id import TodoId
@@ -59,6 +61,53 @@ class TodoService:
             logger.error(f"[TodoService] TODO 찾을 수 없음: id={todo_id.value}")
             raise ValueError(f"Todo with id {todo_id.value} not found")
         return todo
+
+    def _load_backup_json(self, backup_path: str) -> dict:
+        """백업 파일에서 JSON 데이터를 로드합니다 (공통 메서드).
+
+        Args:
+            backup_path: 백업 파일 경로
+
+        Returns:
+            dict: 로드된 JSON 데이터
+
+        Raises:
+            FileNotFoundError: 파일이 없는 경우
+            ValueError: JSON 파싱 에러
+        """
+        path = Path(backup_path)
+        if not path.exists():
+            logger.error(f"[TodoService] 백업 파일 없음: {backup_path}")
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"[TodoService] JSON 파싱 에러: {backup_path}, {e}")
+            raise ValueError(f"Invalid JSON in backup file: {e}")
+
+    def _extract_todos_data(self, data) -> list:
+        """신규/레거시 포맷에서 TODO 데이터를 추출합니다 (공통 메서드).
+
+        Args:
+            data: 로드된 JSON 데이터
+
+        Returns:
+            list: TODO 딕셔너리 리스트
+
+        Raises:
+            ValueError: 잘못된 포맷
+        """
+        if isinstance(data, dict):
+            # 신규 포맷: {version, settings, todos}
+            return data.get('todos', [])
+        elif isinstance(data, list):
+            # 레거시 포맷: 배열
+            return data
+        else:
+            raise ValueError("Invalid backup format: expected dict or list")
+
 
     def create_todo(self, content: str, due_date: Optional[str] = None) -> Todo:
         """새 TODO 생성
@@ -335,6 +384,156 @@ class TodoService:
         logger.info(f"[TodoService] TODO 복구 완료: {restored_count}개")
         return restored_count
 
+
+    # ========================================
+    # 백업에서 하위할일 복구 메서드
+    # ========================================
+
+    def get_subtasks_from_backup(self, backup_path: str) -> Dict[str, List[SubTask]]:
+        """백업 파일에서 모든 TODO의 하위할일 목록 조회
+
+        Args:
+            backup_path: 백업 파일 경로
+
+        Returns:
+            Dict[str, List[SubTask]]: {todo_id: [SubTask, ...]} 형태의 딕셔너리
+
+        Raises:
+            FileNotFoundError: 백업 파일이 없는 경우
+            ValueError: JSON 파싱 에러 또는 잘못된 포맷
+        """
+        logger.info(f"[TodoService] 백업에서 하위할일 목록 조회: path={backup_path}")
+
+        # 1. 백업 파일 로드 (공통 메서드 재사용)
+        data = self._load_backup_json(backup_path)
+
+        # 2. TODO 데이터 추출 (공통 메서드 재사용)
+        todos_data = self._extract_todos_data(data)
+
+        # 3. 각 TODO의 하위할일 매핑
+        result: Dict[str, List[SubTask]] = {}
+
+        for todo_dict in todos_data:
+            try:
+                todo_id = todo_dict.get('id')
+                if not todo_id:
+                    logger.warning("[TodoService] TODO ID 없음, 건너뜀")
+                    continue
+
+                subtasks_data = todo_dict.get('subtasks', [])
+                subtasks = []
+
+                for subtask_dict in subtasks_data:
+                    try:
+                        # SubTask.from_dict() 재사용
+                        subtask = SubTask.from_dict(subtask_dict)
+                        subtasks.append(subtask)
+                    except Exception as e:
+                        logger.error(f"[TodoService] 하위할일 파싱 실패: {subtask_dict}, error: {e}")
+                        continue
+
+                result[todo_id] = subtasks
+
+            except Exception as e:
+                logger.error(f"[TodoService] TODO 처리 실패: {todo_dict}, error: {e}")
+                continue
+
+        logger.info(f"[TodoService] 백업에서 하위할일 목록 조회 완료: {len(result)}개 TODO")
+        return result
+
+    def restore_subtask_from_backup(
+        self,
+        backup_path: str,
+        backup_todo_id: str,
+        subtask_id: str,
+        target_todo_id: str
+    ) -> bool:
+        """백업 파일의 특정 하위할일을 현재 TODO에 복구
+
+        Args:
+            backup_path: 백업 파일 경로
+            backup_todo_id: 백업에서 하위할일을 가져올 TODO ID
+            subtask_id: 복구할 하위할일 ID
+            target_todo_id: 하위할일을 추가할 대상 TODO ID
+
+        Returns:
+            bool: 성공 여부
+        """
+        logger.info(
+            f"[TodoService] 백업에서 하위할일 복구 시작: "
+            f"backup_path={backup_path}, backup_todo_id={backup_todo_id}, "
+            f"subtask_id={subtask_id}, target_todo_id={target_todo_id}"
+        )
+
+        try:
+            # 1. 백업 파일 로드 (공통 메서드 재사용)
+            data = self._load_backup_json(backup_path)
+            todos_data = self._extract_todos_data(data)
+
+            # 2. backup_todo_id에서 해당 TODO 찾기
+            backup_todo_dict = None
+            for todo_dict in todos_data:
+                if todo_dict.get('id') == backup_todo_id:
+                    backup_todo_dict = todo_dict
+                    break
+
+            if backup_todo_dict is None:
+                logger.error(f"[TodoService] 백업에서 TODO 찾을 수 없음: id={backup_todo_id}")
+                return False
+
+            # 3. subtask_id로 하위할일 찾기
+            subtasks_data = backup_todo_dict.get('subtasks', [])
+            source_subtask_dict = None
+            for subtask_dict in subtasks_data:
+                if subtask_dict.get('id') == subtask_id:
+                    source_subtask_dict = subtask_dict
+                    break
+
+            if source_subtask_dict is None:
+                logger.error(
+                    f"[TodoService] 백업 TODO에서 하위할일 찾을 수 없음: "
+                    f"todo_id={backup_todo_id}, subtask_id={subtask_id}"
+                )
+                return False
+
+            # 4. target_todo를 현재 리포지토리에서 조회
+            target_todo_id_vo = TodoId.from_string(target_todo_id)
+            target_todo = self.repository.find_by_id(target_todo_id_vo)
+
+            if target_todo is None:
+                logger.error(f"[TodoService] 대상 TODO 찾을 수 없음: id={target_todo_id}")
+                return False
+
+            # 5. 하위할일 복제 (새 ID 생성하여 충돌 방지)
+            # SubTask.create()를 사용하여 새 ID 생성
+            new_subtask = SubTask.create(
+                content=source_subtask_dict.get('content', ''),
+                due_date=source_subtask_dict.get('dueDate'),
+                order=0  # 자동 정렬됨
+            )
+
+            # 6. target_todo.subtasks에 추가
+            target_todo.add_subtask(new_subtask)
+
+            # 7. 저장
+            self.repository.save(target_todo)
+
+            logger.info(
+                f"[TodoService] 백업에서 하위할일 복구 완료: "
+                f"new_subtask_id={new_subtask.id.value}, target_todo_id={target_todo_id}"
+            )
+            return True
+
+        except FileNotFoundError as e:
+            logger.error(f"[TodoService] 백업 파일 없음: {e}")
+            return False
+        except ValueError as e:
+            logger.error(f"[TodoService] 백업 파일 파싱 에러: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"[TodoService] 하위할일 복구 중 예외 발생: {e}")
+            return False
+
     # ========================================
     # 반복 할일 관련 메서드
     # ========================================
@@ -555,3 +754,33 @@ class TodoService:
         self.repository.save(todo)
 
         logger.info(f"[TodoService] SubTask 완료 토글 완료: subtask_id={subtask_id.value}")
+
+    def reorder_subtasks(
+        self,
+        parent_todo_id: TodoId,
+        subtask_ids: List[TodoId]
+    ) -> None:
+        """하위 할일 순서 재정렬
+
+        Args:
+            parent_todo_id: 메인 할일 ID
+            subtask_ids: 새로운 순서대로 정렬된 하위 할일 ID 목록
+
+        Raises:
+            ValueError: Todo를 찾을 수 없는 경우
+        """
+        logger.info(
+            f"[TodoService] SubTask 순서 재정렬: parent_id={parent_todo_id.value}, "
+            f"new_order={[str(sid) for sid in subtask_ids]}"
+        )
+
+        # 1. 메인 할일 조회 (헬퍼 메서드 사용)
+        todo = self._get_todo_or_raise(parent_todo_id)
+
+        # 2. 순서 재정렬
+        todo.reorder_subtasks(subtask_ids)
+
+        # 3. 저장
+        self.repository.save(todo)
+
+        logger.info(f"[TodoService] SubTask 순서 재정렬 완료")

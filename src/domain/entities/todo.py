@@ -101,13 +101,31 @@ class Todo(BaseTask):
                 return subtask
         return None
 
+    def reorder_subtasks(self, subtask_ids: List[TodoId]) -> None:
+        """하위 할일의 순서를 재정렬합니다.
+
+        주어진 ID 목록 순서대로 order 값을 업데이트합니다.
+
+        Args:
+            subtask_ids: 새로운 순서대로 정렬된 하위 할일 ID 목록
+        """
+        # ID를 인덱스로 매핑
+        id_to_order = {str(sid): idx for idx, sid in enumerate(subtask_ids)}
+
+        # 각 subtask의 order 값 업데이트
+        for subtask in self.subtasks:
+            if str(subtask.id) in id_to_order:
+                subtask.order = id_to_order[str(subtask.id)]
+
+        # order 기준으로 정렬
+        self.subtasks = sorted(self.subtasks, key=lambda st: st.order)
+
     def _sort_subtasks(self, subtasks: List[SubTask]) -> List[SubTask]:
         """하위 할일을 자동 정렬합니다.
 
         정렬 우선순위:
-        1. 납기일이 있는 것이 먼저 (빠른 순)
-        2. 납기일이 같으면 생성시간 순
-        3. 납기일이 없는 것은 맨 뒤 (생성시간 순)
+        1. order 값이 명시적으로 설정된 경우 (order 기준)
+        2. 모든 order가 동일하면 납기일 기준 정렬
 
         Args:
             subtasks: 정렬할 하위 할일 리스트
@@ -115,16 +133,23 @@ class Todo(BaseTask):
         Returns:
             List[SubTask]: 정렬된 하위 할일 리스트
         """
-        def sort_key(subtask: SubTask) -> tuple:
-            # 납기일이 있으면 (False, 납기일, 생성시간)
-            # 납기일이 없으면 (True, 최대 datetime, 생성시간)
-            if subtask.due_date:
-                return (False, subtask.due_date.value, subtask.created_at)
-            else:
-                # 납기일 없는 것은 맨 뒤로
-                return (True, datetime.max, subtask.created_at)
+        # order 값이 모두 동일한지 확인 (수동 정렬이 적용되지 않은 경우)
+        orders = [st.order for st in subtasks]
+        if len(set(orders)) <= 1:
+            # 기존 납기일 기준 정렬
+            def sort_key(subtask: SubTask) -> tuple:
+                # 납기일이 있으면 (False, 납기일, 생성시간)
+                # 납기일이 없으면 (True, 최대 datetime, 생성시간)
+                if subtask.due_date:
+                    return (False, subtask.due_date.value, subtask.created_at)
+                else:
+                    # 납기일 없는 것은 맨 뒤로
+                    return (True, datetime.max, subtask.created_at)
 
-        return sorted(subtasks, key=sort_key)
+            return sorted(subtasks, key=sort_key)
+        else:
+            # order 기준 정렬 (수동 정렬 우선)
+            return sorted(subtasks, key=lambda st: st.order)
 
     @staticmethod
     def create(

@@ -4,7 +4,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
     QLabel, QListWidget, QListWidgetItem, QPushButton, QLineEdit,
-    QCheckBox, QScrollArea, QWidget, QMessageBox
+    QCheckBox, QScrollArea, QWidget, QMessageBox, QComboBox
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIntValidator
@@ -17,8 +17,9 @@ from ..utils.color_utils import create_dialog_palette, apply_palette_recursive
 class BackupManagerDialog(QDialog):
     """백업 관리 및 TODO 일괄 삭제 다이얼로그
 
-    3개 탭 구조:
+    4개 탭 구조:
     - 백업 관리: 백업 목록 조회 및 복구
+    - 하위 할일 복구: 백업에서 개별 하위할일 선택 복구
     - 완료 정리: 완료된 TODO 일괄 삭제
     - 선택 삭제: 진행중 TODO 선택 삭제 (검색 + 체크박스)
     """
@@ -41,13 +42,20 @@ class BackupManagerDialog(QDialog):
         # Palette 적용 플래그
         self._palette_applied = False
 
+        # 하위할일 복구 탭용 캐시 데이터
+        self._subtask_backup_cache: Dict = {}  # {todo_id: [SubTask, ...]}
+        self._subtask_backup_todos: List = []  # 백업 파일의 TODO 목록
+
         self.setup_ui()
         self.apply_styles()
         self.load_data()
 
         self.setModal(True)
         self.setWindowTitle("TODO 관리")
-        self.setFixedSize(*config.WIDGET_SIZES['backup_dialog_size'])
+        # 크기 조절 가능하도록 setMinimumSize 사용 (setFixedSize 대신)
+        self.setMinimumSize(*config.WIDGET_SIZES['backup_dialog_size'])
+        # 초기 크기 설정
+        self.resize(*config.WIDGET_SIZES['backup_dialog_size'])
 
     def setup_ui(self):
         """UI 구성"""
@@ -68,15 +76,19 @@ class BackupManagerDialog(QDialog):
         self.backup_tab = self._create_backup_tab()
         self.tab_widget.addTab(self.backup_tab, "백업 관리")
 
-        # 탭 2: 완료 정리
+        # 탭 2: 하위 할일 복구
+        self.subtask_restore_tab = self._create_subtask_restore_tab()
+        self.tab_widget.addTab(self.subtask_restore_tab, "하위 할일 복구")
+
+        # 탭 3: 완료 정리
         self.completed_tab = self._create_completed_tab()
         self.tab_widget.addTab(self.completed_tab, "완료 정리")
 
-        # 탭 3: 선택 삭제
+        # 탭 4: 선택 삭제
         self.select_tab = self._create_select_tab()
         self.tab_widget.addTab(self.select_tab, "선택 삭제")
 
-        layout.addWidget(self.tab_widget)
+        layout.addWidget(self.tab_widget, 1)  # stretch factor 1로 확장 가능
 
         # 닫기 버튼
         close_layout = QHBoxLayout()
@@ -148,7 +160,7 @@ class BackupManagerDialog(QDialog):
         self.backup_list = QListWidget()
         self.backup_list.setObjectName("backupList")
         self.backup_list.currentItemChanged.connect(self._on_backup_file_selected)
-        left_layout.addWidget(self.backup_list)
+        left_layout.addWidget(self.backup_list, 1)  # stretch factor 1로 확장 가능
 
         content_layout.addWidget(left_widget, config.BACKUP_DIALOG_LAYOUT['file_list_ratio'])
 
@@ -165,7 +177,7 @@ class BackupManagerDialog(QDialog):
 
         self.todo_preview_list = QListWidget()
         self.todo_preview_list.setObjectName("todoPreviewList")
-        right_layout.addWidget(self.todo_preview_list)
+        right_layout.addWidget(self.todo_preview_list, 1)  # stretch factor 1로 확장 가능
 
         # 전체 선택 버튼
         select_all_btn = QPushButton("전체 선택")
@@ -175,7 +187,7 @@ class BackupManagerDialog(QDialog):
 
         content_layout.addWidget(right_widget, config.BACKUP_DIALOG_LAYOUT['preview_ratio'])
 
-        main_layout.addLayout(content_layout)
+        main_layout.addLayout(content_layout, 1)  # stretch factor 1로 확장 가능
 
         # === 하단: 복구 버튼 ===
         buttons_layout = QHBoxLayout()
@@ -195,6 +207,66 @@ class BackupManagerDialog(QDialog):
 
         return widget
 
+    def _create_subtask_restore_tab(self) -> QWidget:
+        """하위 할일 복구 탭 생성 (3단계 계층 구조)"""
+        widget = QWidget()
+        widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        main_layout = QVBoxLayout(widget)
+        main_layout.setContentsMargins(*config.LAYOUT_MARGINS['backup_dialog_tab'])
+        main_layout.setSpacing(config.LAYOUT_SPACING['backup_dialog_tab'])
+
+        # === 단계 1: 백업 파일 선택 ===
+        step1_label = QLabel("1. 백업 파일 선택")
+        step1_label.setObjectName("sectionLabel")
+        main_layout.addWidget(step1_label)
+
+        self.subtask_backup_combo = QComboBox()
+        self.subtask_backup_combo.setObjectName("backupCombo")
+        self.subtask_backup_combo.currentIndexChanged.connect(self._on_subtask_backup_file_changed)
+        main_layout.addWidget(self.subtask_backup_combo)
+
+        # === 단계 2: 백업의 TODO 선택 ===
+        step2_label = QLabel("2. 백업의 TODO 선택")
+        step2_label.setObjectName("sectionLabel")
+        main_layout.addWidget(step2_label)
+
+        self.subtask_backup_todo_list = QListWidget()
+        self.subtask_backup_todo_list.setObjectName("backupList")
+        self.subtask_backup_todo_list.currentItemChanged.connect(self._on_subtask_backup_todo_selected)
+        main_layout.addWidget(self.subtask_backup_todo_list, 1)
+
+        # === 단계 3: 하위할일 선택 및 복구 ===
+        step3_label = QLabel("3. 하위할일 선택")
+        step3_label.setObjectName("sectionLabel")
+        main_layout.addWidget(step3_label)
+
+        self.subtask_list = QListWidget()
+        self.subtask_list.setObjectName("todoPreviewList")
+        main_layout.addWidget(self.subtask_list, 1)
+
+        # 전체 선택 버튼
+        select_all_subtasks_btn = QPushButton("전체 선택")
+        select_all_subtasks_btn.setObjectName("selectAllBtn")
+        select_all_subtasks_btn.clicked.connect(self._on_select_all_subtasks)
+        main_layout.addWidget(select_all_subtasks_btn)
+
+        # === 대상 TODO 선택 ===
+        target_label = QLabel("4. 대상 TODO 선택 (복구할 위치)")
+        target_label.setObjectName("sectionLabel")
+        main_layout.addWidget(target_label)
+
+        self.target_todo_combo = QComboBox()
+        self.target_todo_combo.setObjectName("targetCombo")
+        main_layout.addWidget(self.target_todo_combo)
+
+        # === 복구 버튼 ===
+        restore_subtask_btn = QPushButton("선택한 하위할일 복구")
+        restore_subtask_btn.setObjectName("actionBtn")
+        restore_subtask_btn.clicked.connect(self._on_restore_subtasks_clicked)
+        main_layout.addWidget(restore_subtask_btn)
+
+        return widget
+
     def _create_completed_tab(self) -> QWidget:
         """완료 정리 탭 생성"""
         widget = QWidget()
@@ -208,7 +280,7 @@ class BackupManagerDialog(QDialog):
         desc_label.setObjectName("sectionLabel")
         layout.addWidget(desc_label)
 
-        layout.addStretch()
+        layout.addStretch(1)
 
         # 개수 표시
         self.completed_count_label = QLabel("완료된 TODO: 0개")
@@ -216,7 +288,7 @@ class BackupManagerDialog(QDialog):
         self.completed_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.completed_count_label)
 
-        layout.addStretch()
+        layout.addStretch(1)
 
         # 삭제 버튼
         delete_btn = QPushButton("완료 항목 삭제")
@@ -270,7 +342,7 @@ class BackupManagerDialog(QDialog):
         self.checkbox_layout.addStretch()
 
         scroll.setWidget(self.checkbox_widget)
-        layout.addWidget(scroll)
+        layout.addWidget(scroll, 1)  # stretch factor 1로 확장 가능
 
         # 삭제 버튼
         delete_btn = QPushButton("선택 항목 삭제")
@@ -322,6 +394,45 @@ class BackupManagerDialog(QDialog):
         self._load_backup_list()
         self._load_completed_count()
         self._load_todo_checkboxes()
+        self._load_subtask_restore_tab_data()
+
+    def _load_subtask_restore_tab_data(self):
+        """하위 할일 복구 탭 데이터 로드"""
+        if not self.backup_service:
+            return
+
+        # 백업 파일 목록을 콤보박스에 로드
+        self.subtask_backup_combo.clear()
+        self.subtask_backup_combo.addItem("백업 파일을 선택하세요...")
+
+        backups = self.backup_service.get_backup_list(days=self.backup_display_days)
+        for backup in backups:
+            filename = backup['filename']
+            size_kb = backup['size'] / 1024
+            display_text = f"{filename} ({size_kb:.1f}KB)"
+
+            if not backup['is_valid']:
+                display_text += " [손상됨]"
+
+            self.subtask_backup_combo.addItem(display_text, backup['path'])
+
+        # 현재 TODO 목록을 대상 콤보박스에 로드
+        self._load_current_todos_for_target()
+
+    def _load_current_todos_for_target(self):
+        """현재 TODO 목록을 대상 콤보박스에 로드"""
+        self.target_todo_combo.clear()
+        self.target_todo_combo.addItem("대상 TODO를 선택하세요...")
+
+        if not self.todo_service:
+            return
+
+        todos = self.todo_service.get_all_todos()
+        for todo in todos:
+            # 표시 텍스트: 내용 + 하위할일 개수
+            subtask_count = len(todo.subtasks) if hasattr(todo, 'subtasks') else 0
+            display_text = f"{todo.content.value} (하위할일 {subtask_count}개)"
+            self.target_todo_combo.addItem(display_text, str(todo.id.value))
 
     def _load_backup_list(self):
         """백업 목록 로드 (일수 필터 적용)"""
@@ -386,6 +497,168 @@ class BackupManagerDialog(QDialog):
             checkbox.setObjectName("todoCheckbox")
             self.checkbox_layout.insertWidget(self.checkbox_layout.count() - 1, checkbox)
             self.todo_checkboxes.append((checkbox, str(todo.id.value)))
+
+    def _on_subtask_backup_file_changed(self, index: int):
+        """백업 파일 선택 시 해당 파일의 TODO 목록 로드"""
+        self.subtask_backup_todo_list.clear()
+        self.subtask_list.clear()
+        self._subtask_backup_cache.clear()
+        self._subtask_backup_todos.clear()
+
+        if index <= 0 or not self.backup_service or not self.todo_service:
+            return
+
+        backup_path = self.subtask_backup_combo.itemData(index)
+        if not backup_path:
+            return
+
+        try:
+            # 백업에서 TODO 목록과 하위할일 정보 로드
+            todos = self.backup_service.get_backup_todos(backup_path)
+            self._subtask_backup_todos = todos
+
+            # 하위할일 캐시 로드
+            self._subtask_backup_cache = self.todo_service.get_subtasks_from_backup(backup_path)
+
+            # TODO 목록 표시 (하위할일 개수 포함)
+            for todo in todos:
+                todo_id = str(todo.id.value)
+                subtask_count = len(self._subtask_backup_cache.get(todo_id, []))
+
+                if subtask_count > 0:
+                    display_text = f"{todo.content.value} (하위할일 {subtask_count}개)"
+                    item = QListWidgetItem(display_text)
+                    item.setData(Qt.ItemDataRole.UserRole, todo_id)
+                    self.subtask_backup_todo_list.addItem(item)
+
+            if self.subtask_backup_todo_list.count() == 0:
+                QMessageBox.information(
+                    self, "알림",
+                    "선택한 백업 파일에 하위할일이 있는 TODO가 없습니다."
+                )
+
+        except FileNotFoundError:
+            QMessageBox.warning(self, "오류", "백업 파일을 찾을 수 없습니다.")
+        except ValueError as e:
+            QMessageBox.warning(
+                self, "오류",
+                f"백업 파일이 손상되었거나 형식이 올바르지 않습니다:\n{str(e)}"
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"백업 파일을 읽을 수 없습니다:\n{str(e)}")
+
+    def _on_subtask_backup_todo_selected(self, current, previous):
+        """백업 TODO 선택 시 해당 TODO의 하위할일 목록 표시"""
+        self.subtask_list.clear()
+
+        if not current:
+            return
+
+        todo_id = current.data(Qt.ItemDataRole.UserRole)
+        subtasks = self._subtask_backup_cache.get(todo_id, [])
+
+        for subtask in subtasks:
+            # 표시 텍스트: 내용 + 납기일 (있는 경우)
+            display_text = subtask.content.value
+
+            if subtask.due_date:
+                display_text += f" [{subtask.due_date.value.strftime('%Y-%m-%d')}]"
+
+            # 체크박스 포함 아이템 생성
+            item = QListWidgetItem(display_text)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Unchecked)
+
+            # UserRole에 (todo_id, subtask_id) 저장
+            item.setData(Qt.ItemDataRole.UserRole, (todo_id, str(subtask.id.value)))
+
+            self.subtask_list.addItem(item)
+
+    def _on_select_all_subtasks(self):
+        """하위할일 전체 선택"""
+        for i in range(self.subtask_list.count()):
+            item = self.subtask_list.item(i)
+            item.setCheckState(Qt.CheckState.Checked)
+
+    def _on_restore_subtasks_clicked(self):
+        """선택한 하위할일을 대상 TODO에 복구"""
+        if not self.todo_service or not self.backup_service:
+            QMessageBox.warning(self, "경고", "서비스를 사용할 수 없습니다.")
+            return
+
+        # 1. 선택된 하위할일 확인
+        selected_subtasks = []
+        for i in range(self.subtask_list.count()):
+            item = self.subtask_list.item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                backup_todo_id, subtask_id = item.data(Qt.ItemDataRole.UserRole)
+                selected_subtasks.append((backup_todo_id, subtask_id))
+
+        if not selected_subtasks:
+            QMessageBox.information(self, "알림", "복구할 하위할일을 선택하세요.")
+            return
+
+        # 2. 대상 TODO 확인
+        target_index = self.target_todo_combo.currentIndex()
+        if target_index <= 0:
+            QMessageBox.information(self, "알림", "대상 TODO를 선택하세요.")
+            return
+
+        target_todo_id = self.target_todo_combo.itemData(target_index)
+        if not target_todo_id:
+            QMessageBox.warning(self, "오류", "대상 TODO를 찾을 수 없습니다.")
+            return
+
+        # 3. 백업 파일 경로 가져오기
+        backup_index = self.subtask_backup_combo.currentIndex()
+        if backup_index <= 0:
+            QMessageBox.warning(self, "오류", "백업 파일이 선택되지 않았습니다.")
+            return
+
+        backup_path = self.subtask_backup_combo.itemData(backup_index)
+
+        # 4. 확인 다이얼로그
+        if not self._show_confirmation(
+            "확인",
+            f"선택한 {len(selected_subtasks)}개의 하위할일을 복구하시겠습니까?"
+        ):
+            return
+
+        # 5. 하위할일 복구 실행
+        success_count = 0
+        fail_count = 0
+
+        for backup_todo_id, subtask_id in selected_subtasks:
+            try:
+                result = self.todo_service.restore_subtask_from_backup(
+                    backup_path=backup_path,
+                    backup_todo_id=backup_todo_id,
+                    subtask_id=subtask_id,
+                    target_todo_id=target_todo_id
+                )
+                if result:
+                    success_count += 1
+                else:
+                    fail_count += 1
+            except Exception as e:
+                fail_count += 1
+
+        # 6. 결과 메시지 표시
+        if success_count > 0 and fail_count == 0:
+            message = f"{success_count}개의 하위할일이 복구되었습니다."
+        elif success_count > 0 and fail_count > 0:
+            message = f"{success_count}개 복구 완료, {fail_count}개 실패"
+        else:
+            message = "하위할일 복구에 실패했습니다."
+
+        QMessageBox.information(self, "복구 결과", message)
+
+        # 7. 대상 TODO 콤보박스 갱신 (하위할일 개수 업데이트)
+        self._load_current_todos_for_target()
+
+        # 8. 다이얼로그 닫기
+        if success_count > 0:
+            self.accept()
 
     def _on_days_changed(self):
         """일수 변경 시 목록 재로드"""
@@ -745,6 +1018,31 @@ class BackupManagerDialog(QDialog):
 
             QLineEdit#searchInput:focus {{
                 border-color: {config.COLORS['accent']};
+            }}
+
+            QComboBox#backupCombo, QComboBox#targetCombo {{
+                background: {config.COLORS['secondary_bg']};
+                border: 1px solid {config.COLORS['border']};
+                border-radius: {config.UI_METRICS['border_radius']['lg']}px;
+                padding: 8px;
+                color: {config.COLORS['text_primary']};
+                font-size: {config.FONT_SIZES['base']}px;
+            }}
+
+            QComboBox#backupCombo:focus, QComboBox#targetCombo:focus {{
+                border-color: {config.COLORS['accent']};
+            }}
+
+            QComboBox#backupCombo::drop-down, QComboBox#targetCombo::drop-down {{
+                border: none;
+                padding-right: 10px;
+            }}
+
+            QComboBox#backupCombo QAbstractItemView, QComboBox#targetCombo QAbstractItemView {{
+                background: {config.COLORS['card']};
+                border: 1px solid {config.COLORS['border']};
+                selection-background-color: {config.COLORS['accent']};
+                color: {config.COLORS['text_primary']};
             }}
 
             QScrollArea#todoScroll {{

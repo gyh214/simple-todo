@@ -8,15 +8,17 @@ Phase 1.3: SubTask UI 구현
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QCheckBox, QPushButton, QGraphicsOpacityEffect
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QMouseEvent
+import json
 
 import config
 from ...domain.entities.subtask import SubTask
 from ...domain.value_objects.todo_id import TodoId
 from ...domain.value_objects.due_date import DueDateStatus
 from .rich_text_widget import RichTextWidget
+from .mixins.draggable_mixin import DraggableMixin
 
 
-class SubTaskWidget(QWidget):
+class SubTaskWidget(DraggableMixin, QWidget):
     """하위 할일 아이템 위젯
 
     UI 구조:
@@ -50,6 +52,9 @@ class SubTaskWidget(QWidget):
         self.subtask = subtask
         self._is_hovered = False
 
+        # DraggableMixin 초기화
+        self.setup_draggable()
+
         self._setup_ui()
         self._apply_styles()
         self._connect_signals()
@@ -64,6 +69,14 @@ class SubTaskWidget(QWidget):
         )
         main_layout.setSpacing(10)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # 0. 드래그 핸들 (DraggableMixin 필수)
+        self.drag_handle = QLabel("☰")
+        self.drag_handle.setObjectName("subtaskDragHandle")
+        self.drag_handle.setFixedWidth(14)
+        self.drag_handle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.drag_handle.setCursor(Qt.CursorShape.OpenHandCursor)
+        main_layout.addWidget(self.drag_handle)
 
         # 1. 체크박스
         self.checkbox = QCheckBox()
@@ -82,7 +95,7 @@ class SubTaskWidget(QWidget):
         self.subtask_text = RichTextWidget(str(self.subtask.content))
         self.subtask_text.setObjectName("subtaskText")
         self.subtask_text.setMinimumWidth(
-            config.LAYOUT_SIZES['todo_text_base_max_width'] - config.WIDGET_SIZES['subtask_indent']
+            config.LAYOUT_SIZES['todo_text_base_max_width'] - config.WIDGET_SIZES['subtask_indent'] - 14
         )
         if self.subtask.completed:
             self.subtask_text.setProperty("completed", "true")
@@ -162,6 +175,11 @@ class SubTaskWidget(QWidget):
         QWidget#subtaskItem:hover {{
             background: rgba(64, 64, 64, 0.1);
             border-radius: {config.UI_METRICS['border_radius']['lg']}px;
+        }}
+
+        QLabel#subtaskDragHandle {{
+            color: {config.COLORS['text_disabled']};
+            font-size: {config.FONT_SIZES['base']}px;
         }}
 
         QCheckBox#subtaskCheckbox {{
@@ -253,6 +271,11 @@ class SubTaskWidget(QWidget):
 
         # 완료 상태면 개별 요소에 opacity 효과 적용 (삭제 버튼 제외)
         if self.subtask.completed:
+            # 드래그 핸들에 opacity 적용
+            handle_opacity = QGraphicsOpacityEffect()
+            handle_opacity.setOpacity(config.OPACITY_VALUES['completed_item'])
+            self.drag_handle.setGraphicsEffect(handle_opacity)
+
             # 체크박스에 opacity 적용
             checkbox_opacity = QGraphicsOpacityEffect()
             checkbox_opacity.setOpacity(config.OPACITY_VALUES['completed_item'])
@@ -270,6 +293,7 @@ class SubTaskWidget(QWidget):
                 self.date_badge.setGraphicsEffect(badge_opacity)
         else:
             # 완료 해제 시 opacity 효과 제거
+            self.drag_handle.setGraphicsEffect(None)
             self.checkbox.setGraphicsEffect(None)
             self.subtask_text.setGraphicsEffect(None)
             if self.date_badge:
@@ -346,6 +370,34 @@ class SubTaskWidget(QWidget):
         self.style().unpolish(self)
         self.style().polish(self)
         self.update()
+
+    def get_drag_data(self) -> str:
+        """드래그할 데이터 반환 (DraggableMixin 요구 메서드)
+
+        Returns:
+            str: JSON 형식의 subtask_id와 parent_todo_id
+        """
+        data = {
+            "type": "subtask",
+            "subtask_id": str(self.subtask.id),
+            "parent_todo_id": str(self.parent_todo_id)
+        }
+        return json.dumps(data)
+
+    def get_widget_styles(self) -> str:
+        """현재 위젯 스타일 반환 (DraggableMixin 요구 메서드)
+
+        Returns:
+            str: 현재 위젯 스타일 시트
+        """
+        return self.styleSheet()
+
+    def apply_styles(self) -> None:
+        """스타일 재적용 (DraggableMixin 요구 메서드)
+
+        DraggableMixin._start_drag()에서 드래그 종료 후 호출됩니다.
+        """
+        self._apply_styles()
 
     def update_subtask(self, subtask: SubTask) -> None:
         """SubTask 데이터 업데이트

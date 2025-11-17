@@ -7,7 +7,9 @@ docs/todo-app-ui.html의 .todo-item 구조를 정확히 재현합니다.
 
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QCheckBox, QPushButton, QGraphicsOpacityEffect
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QMouseEvent, QAction, QDragEnterEvent, QDragMoveEvent, QDropEvent
+from PyQt6.QtWidgets import QMenu
+import json
 
 import config
 from ...domain.entities.todo import Todo
@@ -39,6 +41,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
     check_toggled = pyqtSignal(str, bool)
     edit_requested = pyqtSignal(str)
     edit_with_selection_requested = pyqtSignal(object)  # Todo 객체 전달 (하위할일이 있을 때)
+    copy_requested = pyqtSignal(str)  # 복사 요청 (todo_id)
 
     # 하위 할일 시그널
     subtask_toggled = pyqtSignal(object, object)  # parent_id, subtask_id
@@ -47,6 +50,9 @@ class TodoItemWidget(QWidget, DraggableMixin):
 
     # 펼침 상태 변경 시그널 (Phase 1)
     expanded_changed = pyqtSignal(str, bool)  # (todo_id, is_expanded)
+
+    # 하위 할일 순서 변경 시그널
+    subtask_reordered = pyqtSignal(str, list)  # (todo_id, new_subtask_ids)
 
     def __init__(self, todo: Todo, parent=None):
         """TodoItemWidget 초기화
@@ -185,6 +191,11 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.subtasks_layout = QVBoxLayout(self.subtasks_container)
         self.subtasks_layout.setContentsMargins(0, 0, 0, 0)
         self.subtasks_layout.setSpacing(2)
+
+        # 드래그 앤 드롭 수락 설정
+        self.subtasks_container.setAcceptDrops(True)
+        # 이벤트 필터 설치 (드롭 이벤트 처리)
+        self.subtasks_container.installEventFilter(self)
 
         # 하위 할일 위젯 생성
         self._populate_subtasks()
@@ -501,6 +512,26 @@ class TodoItemWidget(QWidget, DraggableMixin):
         # 시그널 처리 중 위젯이 삭제될 수 있어 RuntimeError 방지
         event.accept()
 
+    def contextMenuEvent(self, event) -> None:
+        """우클릭 컨텍스트 메뉴 이벤트 핸들러
+
+        Args:
+            event: 컨텍스트 메뉴 이벤트
+        """
+        menu = QMenu(self)
+
+        # 복사 액션
+        copy_action = QAction("복사", self)
+        copy_action.triggered.connect(self._on_copy_clicked)
+        menu.addAction(copy_action)
+
+        # 메뉴 표시
+        menu.exec(event.globalPos())
+
+    def _on_copy_clicked(self) -> None:
+        """복사 메뉴 클릭 이벤트 핸들러"""
+        self.copy_requested.emit(str(self.todo.id))
+
     def enterEvent(self, event) -> None:
         """마우스 진입 이벤트 (호버 효과)
 
@@ -564,6 +595,153 @@ class TodoItemWidget(QWidget, DraggableMixin):
             str: 현재 위젯 스타일 시트
         """
         return self.styleSheet()
+
+    def eventFilter(self, obj, event):
+        """이벤트 필터 (subtasks_container의 드롭 이벤트 처리)
+
+        Args:
+            obj: 이벤트를 받은 객체
+            event: 이벤트
+
+        Returns:
+            bool: 이벤트 처리 여부
+        """
+        if obj == self.subtasks_container:
+            if event.type() == event.Type.DragEnter:
+                return self._handle_drag_enter(event)
+            elif event.type() == event.Type.DragMove:
+                return self._handle_drag_move(event)
+            elif event.type() == event.Type.Drop:
+                return self._handle_drop(event)
+        return super().eventFilter(obj, event)
+
+    def _handle_drag_enter(self, event: QDragEnterEvent) -> bool:
+        """드래그 진입 이벤트 처리
+
+        Args:
+            event: 드래그 이벤트
+
+        Returns:
+            bool: 이벤트 처리 여부
+        """
+        if event.mimeData().hasText():
+            try:
+                data = json.loads(event.mimeData().text())
+                # subtask 타입이고 같은 부모 ID인지 확인
+                if data.get('type') == 'subtask' and data.get('parent_todo_id') == str(self.todo.id):
+                    event.acceptProposedAction()
+                    return True
+            except (json.JSONDecodeError, KeyError):
+                pass
+        event.ignore()
+        return True
+
+    def _handle_drag_move(self, event: QDragMoveEvent) -> bool:
+        """드래그 이동 이벤트 처리
+
+        Args:
+            event: 드래그 이벤트
+
+        Returns:
+            bool: 이벤트 처리 여부
+        """
+        if event.mimeData().hasText():
+            try:
+                data = json.loads(event.mimeData().text())
+                if data.get('type') == 'subtask' and data.get('parent_todo_id') == str(self.todo.id):
+                    event.acceptProposedAction()
+                    return True
+            except (json.JSONDecodeError, KeyError):
+                pass
+        event.ignore()
+        return True
+
+    def _handle_drop(self, event: QDropEvent) -> bool:
+        """드롭 이벤트 처리 (하위 할일 순서 변경)
+
+        Args:
+            event: 드롭 이벤트
+
+        Returns:
+            bool: 이벤트 처리 여부
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if not event.mimeData().hasText():
+            event.ignore()
+            return True
+
+        try:
+            data = json.loads(event.mimeData().text())
+            if data.get('type') != 'subtask':
+                event.ignore()
+                return True
+
+            # 같은 부모 내에서만 순서 변경 허용
+            if data.get('parent_todo_id') != str(self.todo.id):
+                event.ignore()
+                return True
+
+            dragged_subtask_id = data.get('subtask_id')
+
+            # 드롭 위치 계산
+            drop_pos = event.position().toPoint()
+            new_position = self._calculate_subtask_drop_position(drop_pos)
+
+            # 현재 순서 가져오기
+            current_ids = [str(st.id) for st in self.todo.subtasks]
+
+            # 드래그된 항목의 현재 위치
+            if dragged_subtask_id not in current_ids:
+                event.ignore()
+                return True
+
+            old_position = current_ids.index(dragged_subtask_id)
+
+            # 새로운 순서 계산
+            current_ids.remove(dragged_subtask_id)
+            # 새 위치 조정 (항목이 제거되었으므로)
+            if new_position > old_position:
+                new_position -= 1
+            current_ids.insert(new_position, dragged_subtask_id)
+
+            logger.info(f'[SubtaskDrop] todo_id={str(self.todo.id)[:8]}..., subtask_id={dragged_subtask_id[:8]}..., new_order={[sid[:8] for sid in current_ids]}')
+
+            # 순서 변경 시그널 발생
+            self.subtask_reordered.emit(str(self.todo.id), current_ids)
+
+            event.acceptProposedAction()
+            return True
+
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f'[SubtaskDrop] JSON parse error: {e}')
+            event.ignore()
+            return True
+
+    def _calculate_subtask_drop_position(self, drop_pos) -> int:
+        """드롭 위치를 하위 할일 리스트의 인덱스로 변환
+
+        Args:
+            drop_pos: 드롭 위치 (QPoint)
+
+        Returns:
+            int: 새로운 위치 (0부터 시작하는 인덱스)
+        """
+        # subtasks_layout에서 각 하위 할일 위젯과 비교
+        for i in range(self.subtasks_layout.count()):
+            item = self.subtasks_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                widget_rect = widget.geometry()
+                widget_center_y = widget_rect.top() + widget_rect.height() / 2
+
+                # 드롭 위치가 위젯의 중앙보다 위에 있으면 해당 인덱스에 삽입
+                if drop_pos.y() < widget_center_y:
+                    return i
+
+        # 모든 위젯보다 아래면 맨 뒤에 삽입
+        return self.subtasks_layout.count()
 
     def update_todo(self, todo: Todo) -> None:
         """TODO 데이터 업데이트

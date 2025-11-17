@@ -385,6 +385,89 @@ class TodoService:
         return restored_count
 
 
+
+    def copy_todo(self, todo_id: str) -> Optional[Todo]:
+        """TODO를 복사합니다 (하위 할일 포함).
+
+        복사본은 원본 바로 아래에 삽입되며, 내용 앞에 "(복사) " 접두사가 추가됩니다.
+        하위 할일은 그대로 복사됩니다 (접두사 없음).
+
+        Args:
+            todo_id: 복사할 TODO ID (문자열)
+
+        Returns:
+            Optional[Todo]: 생성된 복사본, 실패 시 None
+
+        Raises:
+            ValueError: TODO를 찾을 수 없는 경우
+        """
+        logger.info(f"[TodoService] TODO 복사 시작: id={todo_id}")
+
+        # 1. 원본 TODO 조회
+        todo_id_vo = TodoId.from_string(todo_id)
+        original_todo = self.repository.find_by_id(todo_id_vo)
+
+        if original_todo is None:
+            logger.error(f"[TodoService] TODO 찾을 수 없음: id={todo_id}")
+            raise ValueError(f"TODO not found: {todo_id}")
+
+        # 2. 원본을 딕셔너리로 변환 (깊은 복사 패턴 재사용)
+        original_dict = original_todo.to_dict()
+
+        # 3. 새 ID 생성
+        new_id = TodoId.generate()
+
+        # 4. 내용에 "(복사) " 접두사 추가
+        new_content = f"(복사) {original_dict['content']}"
+
+        # 5. 모든 TODO 조회하여 order 재조정
+        all_todos = self.repository.find_all()
+        incomplete_todos = [todo for todo in all_todos if not todo.completed]
+
+        # 원본의 order 찾기
+        original_order = original_todo.order
+
+        # 원본 이후의 모든 진행중 TODO의 order를 1씩 증가
+        for todo in incomplete_todos:
+            if todo.order > original_order:
+                todo.change_order(todo.order + 1)
+                self.repository.save(todo)
+
+        # 6. 새 TODO 생성 (원본 order + 1)
+        new_todo = Todo(
+            id=new_id,
+            content=Content(value=new_content),
+            completed=original_todo.completed,
+            created_at=original_todo.created_at,
+            due_date=original_todo.due_date,
+            order=original_order + 1,
+            subtasks=[],
+            recurrence=original_todo.recurrence
+        )
+
+        # 7. 하위 할일 복사 (새 ID로 생성, 접두사 없음)
+        for subtask in original_todo.subtasks:
+            new_subtask = SubTask.create(
+                content=str(subtask.content),  # 접두사 없음
+                due_date=str(subtask.due_date) if subtask.due_date else None,
+                order=subtask.order
+            )
+            # 완료 상태 유지
+            if subtask.completed:
+                new_subtask.complete()
+            new_todo.add_subtask(new_subtask)
+
+        # 8. 저장
+        self.repository.save(new_todo)
+
+        logger.info(
+            f"[TodoService] TODO 복사 완료: "
+            f"original_id={todo_id}, new_id={new_id.value}, "
+            f"subtasks={len(new_todo.subtasks)}"
+        )
+
+        return new_todo
+
     # ========================================
     # 백업에서 하위할일 복구 메서드
     # ========================================

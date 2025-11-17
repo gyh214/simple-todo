@@ -106,6 +106,10 @@ class MainWindowEventHandler:
         self.completed_section.todo_edit_with_selection_requested.connect(self.on_todo_edit_with_selection)
         self.completed_section.todo_reordered.connect(self.on_todo_reorder)
 
+        # 섹션: TODO 복사 이벤트
+        self.in_progress_section.todo_copy_requested.connect(self.on_todo_copy)
+        self.completed_section.todo_copy_requested.connect(self.on_todo_copy)
+
         # 섹션: 하위 할일 이벤트 (SectionWidget이 TodoItemWidget 시그널을 전파함)
         self.in_progress_section.subtask_toggled.connect(self.on_subtask_toggled)
         self.in_progress_section.subtask_edit_requested.connect(self.on_subtask_edit)
@@ -114,6 +118,10 @@ class MainWindowEventHandler:
         self.completed_section.subtask_toggled.connect(self.on_subtask_toggled)
         self.completed_section.subtask_edit_requested.connect(self.on_subtask_edit)
         self.completed_section.subtask_delete_requested.connect(self.on_subtask_delete)
+
+        # 섹션: 하위 할일 순서 변경 이벤트
+        self.in_progress_section.subtask_reordered_requested.connect(self.on_subtask_reordered)
+        self.completed_section.subtask_reordered_requested.connect(self.on_subtask_reordered)
 
         # Splitter 이동
         self.splitter.splitterMoved.connect(self.on_splitter_moved)
@@ -636,6 +644,39 @@ class MainWindowEventHandler:
         except Exception as e:
             logger.error(f"Failed to reorder todo: {e}", exc_info=True)
 
+    def on_todo_copy(self, todo_id: str) -> None:
+        """TODO 복사 핸들러
+
+        Args:
+            todo_id: 복사할 TODO ID
+        """
+        try:
+            # 1. TodoService를 통해 TODO 복사
+            copied_todo = self.todo_service.copy_todo(todo_id)
+
+            if copied_todo:
+                logger.info(f"Todo copied successfully: original={todo_id}, new={copied_todo.id.value}")
+
+                # 2. UI 갱신 (정렬 순서 유지)
+                self.load_todos()
+            else:
+                logger.error(f"Failed to copy todo: {todo_id}")
+
+        except ValueError as e:
+            logger.error(f"Copy error - todo not found: {e}")
+            QMessageBox.warning(
+                self.main_window,
+                "복사 실패",
+                f"할일을 찾을 수 없습니다: {e}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to copy todo: {e}", exc_info=True)
+            QMessageBox.critical(
+                self.main_window,
+                "오류",
+                f"할일 복사 중 오류가 발생했습니다: {e}"
+            )
+
     def _on_manage_clicked(self) -> None:
         """관리 버튼 클릭 → BackupManagerDialog 표시
 
@@ -750,6 +791,28 @@ class MainWindowEventHandler:
                 "하위 할일 삭제 중 오류가 발생했습니다.",
                 QMessageBox.StandardButton.Ok
             )
+
+    def on_subtask_reordered(self, todo_id: str, subtask_ids: list) -> None:
+        """하위 할일 순서 변경 핸들러
+
+        Args:
+            todo_id: 메인 할일 ID (문자열)
+            subtask_ids: 새로운 순서대로 정렬된 하위 할일 ID 목록 (문자열 리스트)
+        """
+        try:
+            # 문자열 ID를 TodoId 객체로 변환
+            parent_todo_id = TodoId.from_string(todo_id)
+            subtask_id_objects = [TodoId.from_string(sid) for sid in subtask_ids]
+
+            # TodoService를 통해 순서 변경
+            self.todo_service.reorder_subtasks(parent_todo_id, subtask_id_objects)
+            logger.info(f"Subtasks reordered: parent={todo_id[:8]}..., new_order={[sid[:8] for sid in subtask_ids]}")
+
+            # UI 갱신
+            self.load_todos()
+
+        except Exception as e:
+            logger.error(f"Failed to reorder subtasks: {e}", exc_info=True)
 
     # ========================================
     # Phase 1: 펼침 상태 관리

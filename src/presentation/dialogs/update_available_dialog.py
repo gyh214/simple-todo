@@ -10,10 +10,8 @@ from PyQt6.QtCore import Qt
 from typing import TYPE_CHECKING
 
 import config
-
-if TYPE_CHECKING:
-    from ...domain.entities.release import Release
-    from ...domain.value_objects.app_version import AppVersion
+from ...domain.entities.release import Release
+from ...domain.value_objects.app_version import AppVersion
 
 
 logger = logging.getLogger(__name__)
@@ -53,9 +51,7 @@ class UpdateAvailableDialog(QDialog):
         """
         super().__init__(parent)
 
-        # lazy import로 순환 참조 방지
-        from ...domain.entities.release import Release
-        from ...domain.value_objects.app_version import AppVersion
+        # Import statements moved to top of file
 
         if not isinstance(release, Release):
             raise TypeError(f"release는 Release여야 합니다")

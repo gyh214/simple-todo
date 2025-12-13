@@ -241,12 +241,24 @@ class UpdateManager:
                 logger.info("업데이트 나중에")
 
         except Exception as e:
+            # 첫 번째 예외: 다이얼로그 생성 또는 표시 실패
             logger.error(f"업데이트 알림 다이얼로그 표시 실패: {e}", exc_info=True)
-            QMessageBox.critical(
-                self.parent_window,
-                "업데이트 오류",
-                f"업데이트 알림을 표시할 수 없습니다.\n\n{str(e)}"
-            )
+
+            # QMessageBox 생성 시도 (두 번째 예외 방지)
+            try:
+                QMessageBox.critical(
+                    self.parent_window,
+                    "업데이트 오류",
+                    f"업데이트 알림을 표시할 수 없습니다.\n\n에러: {str(e)[:100]}"  # 에러 메시지 길이 제한
+                )
+            except Exception as msgbox_error:
+                # 두 번째 예외: QMessageBox 생성 실패 시 최소한의 로깅만 수행
+                logger.critical(
+                    f"치명적 오류: 업데이트 알림과 에러 다이얼로그 모두 실패\n"
+                    f"원본 에러: {e}\n"
+                    f"메시지박스 에러: {msgbox_error}"
+                )
+                # 앱이 중단되지 않도록 아무것도 하지 않고 반환
 
     def _start_download(self, release: 'Release'):
         """다운로드를 시작합니다.

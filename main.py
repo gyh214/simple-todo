@@ -10,7 +10,7 @@ import atexit
 import shutil
 from pathlib import Path
 from datetime import datetime
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 import config
 from src.core.container import Container, ServiceNames
@@ -414,6 +414,14 @@ def main():
     except Exception as e:
         logger.error(f"Failed to integrate UpdateManager: {e}")
         logger.warning("App will continue without auto-update UI integration")
+
+        # 사용자에게 알림 표시
+        QMessageBox.warning(
+            None,
+            "업데이트 기능",
+            "자동 업데이트 기능을 활성화할 수 없습니다.\n"
+            "수동으로 업데이트를 확인해주세요."
+        )
 
     # 활성화 요청 시 창 표시
     single_instance.activate_requested.connect(lambda: (window.show(), window.activateWindow(), window.raise_()))

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional, Callable
 
 from ...domain.entities.release import Release
-from ...infrastructure.services.update_downloader_service import UpdateDownloaderService
 
 
 logger = logging.getLogger(__name__)
@@ -36,7 +35,7 @@ class DownloadUpdateUseCase:
 
     def __init__(
         self,
-        downloader: UpdateDownloaderService,
+        downloader,  # Type hint removed to accept any downloader interface
         filename: str = "SimpleTodo_new.exe"
     ):
         """DownloadUpdateUseCase 초기화
@@ -46,14 +45,8 @@ class DownloadUpdateUseCase:
             filename: 저장할 파일명 (기본값: "SimpleTodo_new.exe")
 
         Raises:
-            TypeError: downloader가 UpdateDownloaderService가 아닌 경우
             ValueError: filename이 비어있거나 .exe 확장자가 아닌 경우
         """
-        if not isinstance(downloader, UpdateDownloaderService):
-            raise TypeError(
-                f"downloader는 UpdateDownloaderService여야 합니다. "
-                f"받은 타입: {type(downloader)}"
-            )
 
         if not filename or not isinstance(filename, str):
             raise ValueError(f"filename이 유효하지 않습니다: {filename}")

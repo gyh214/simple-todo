@@ -5,7 +5,6 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from ...infrastructure.services.update_installer_service import UpdateInstallerService
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +36,7 @@ class InstallUpdateUseCase:
 
     def __init__(
         self,
-        installer: UpdateInstallerService,
+        installer,  # Type hint removed to accept any installer interface
         current_exe_path: Path
     ):
         """InstallUpdateUseCase 초기화
@@ -45,17 +44,9 @@ class InstallUpdateUseCase:
         Args:
             installer: 업데이트 설치 서비스
             current_exe_path: 현재 실행 중인 exe 파일 경로
-
-        Raises:
-            TypeError: installer가 UpdateInstallerService가 아닌 경우
             ValueError: current_exe_path가 유효하지 않은 경우
         """
-        if not isinstance(installer, UpdateInstallerService):
-            raise TypeError(
-                f"installer는 UpdateInstallerService여야 합니다. "
-                f"받은 타입: {type(installer)}"
-            )
-
+        
         if not current_exe_path or not isinstance(current_exe_path, Path):
             raise ValueError(
                 f"current_exe_path가 유효하지 않습니다: {current_exe_path}"

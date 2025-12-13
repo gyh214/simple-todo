@@ -5,9 +5,9 @@ Phase 1.3: SubTask UI 구현
 메인 할일의 하위 할일을 표시하는 위젯 (납기일 자동 정렬, 드래그 불필요)
 """
 
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QCheckBox, QPushButton, QGraphicsOpacityEffect
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QCheckBox, QPushButton, QGraphicsOpacityEffect, QToolTip
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QMouseEvent, QCursor
 import json
 
 import config
@@ -336,8 +336,26 @@ class SubTaskWidget(DraggableMixin, QWidget):
         # 이벤트가 부모 위젯(TodoItemWidget)으로 전파되는 것을 방지
         event.accept()
 
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """마우스 클릭 이벤트 핸들러 (싱글클릭 편집 지원)
+
+        Args:
+            event: 마우스 이벤트
+        """
+        # 왼쪽 버튼 클릭 && 텍스트 영역 클릭 && 확장된 내용이 필요한 경우
+        if (event.button() == Qt.MouseButton.LeftButton
+            and self._is_click_on_text_area(event.pos())
+            and self._should_show_expanded_content()):
+            # 싱글클릭으로 편집 요청
+            self.subtask_edit_requested.emit(self.parent_todo_id, self.subtask.id)
+            event.accept()
+            return
+
+        # 다른 영역 클릭 시 기본 동작
+        super().mousePressEvent(event)
+
     def enterEvent(self, event) -> None:
-        """마우스 진입 이벤트 (호버 효과)
+        """마우스 진입 이벤트 (호버 효과 + 텍스트 확장)
 
         Args:
             event: 이벤트 객체
@@ -345,10 +363,18 @@ class SubTaskWidget(DraggableMixin, QWidget):
         self._is_hovered = True
         # Opacity로 부드럽게 표시
         self.delete_btn_opacity.setOpacity(config.OPACITY_VALUES['visible'])
+
+        # 텍스트 확장이 필요한 경우
+        if self._should_expand_text():
+            # RichTextWidget의 확장 기능 호출
+            self.subtask_text.set_expanded(True)
+            # 레이아웃 업데이트
+            self.adjustSize()
+
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        """마우스 이탈 이벤트 (호버 효과 해제)
+        """마우스 이탈 이벤트 (호버 효과 해제 + 텍스트 축소)
 
         Args:
             event: 이벤트 객체
@@ -356,6 +382,14 @@ class SubTaskWidget(DraggableMixin, QWidget):
         self._is_hovered = False
         # Opacity로 부드럽게 숨김
         self.delete_btn_opacity.setOpacity(config.OPACITY_VALUES['hidden'])
+
+        # 텍스트 확장 상태 복원
+        if self._should_expand_text():
+            # RichTextWidget의 축소 기능 호출
+            self.subtask_text.set_expanded(False)
+            # 레이아웃 업데이트
+            self.adjustSize()
+
         super().leaveEvent(event)
 
     def _update_completion_style(self) -> None:
@@ -370,6 +404,49 @@ class SubTaskWidget(DraggableMixin, QWidget):
         self.style().unpolish(self)
         self.style().polish(self)
         self.update()
+
+    def _should_expand_text(self) -> bool:
+        """텍스트 확장이 필요한지 확인
+
+        Returns:
+            bool: 텍스트가 길거나 여러 줄인 경우 True
+        """
+        content = str(self.subtask.content)
+
+        # 개행 문자가 있으면 여러 줄로 판단
+        if '\n' in content or '\r' in content:
+            return True
+
+        # 텍스트 길이가 50자를 초과하거나 개행 문자가 있으면 확장 필요
+        # (폰트 크기 14px 기준 약 3-4줄 분량)
+        if len(content) > 50 or '\n' in content or '\r' in content:
+            return True
+
+        return False
+
+    def _should_show_expanded_content(self) -> bool:
+        """확장된 내용 표시가 필요한지 확인
+
+        Returns:
+            bool: 텍스트가 길거나 여러 줄인 경우 True
+        """
+        return self._should_expand_text()
+
+    def _is_click_on_text_area(self, pos) -> bool:
+        """클릭 위치가 텍스트 영역인지 확인
+
+        Args:
+            pos: 클릭 위치 (QPoint)
+
+        Returns:
+            bool: 텍스트 영역이면 True
+        """
+        # subtask_text 위젯의 위치와 크기 가져오기
+        text_widget = self.subtask_text
+        text_rect = text_widget.geometry()
+
+        # 클릭 위치가 텍스트 위젯 영역 내인지 확인
+        return text_rect.contains(pos)
 
     def get_drag_data(self) -> str:
         """드래그할 데이터 반환 (DraggableMixin 요구 메서드)

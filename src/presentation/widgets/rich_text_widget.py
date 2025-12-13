@@ -36,6 +36,7 @@ class RichTextWidget(QLabel):
         super().__init__(parent)
         self.raw_text = text
         self.links = []
+        self._expanded = False  # 확장 상태 추적
 
         # Rich Text 포맷 설정
         self.setTextFormat(Qt.TextFormat.RichText)
@@ -78,9 +79,13 @@ class RichTextWidget(QLabel):
         Returns:
             HTML 문자열
         """
+        # 확장 상태일 때 개행 문자를 <br> 태그로 변환
+        if self._expanded:
+            display_text = display_text.replace('\r\n', '<br>').replace('\n', '<br>').replace('\r', '<br>')
+
         if not original_links:
-            # 링크가 없으면 텍스트만 반환
-            return self._escape_html(display_text)
+            # 링크가 없으면 텍스트만 반환 (개행 처리된)
+            return display_text
 
         # 링크를 <a> 태그로 변환
         result = []
@@ -287,42 +292,138 @@ class RichTextWidget(QLabel):
         """
         return self.links
 
+    def set_expanded(self, expanded: bool):
+        """텍스트 확장/축소 설정.
+
+        Args:
+            expanded: True면 확장, False면 축소
+        """
+        if self._expanded == expanded:
+            return  # 상태가 같으면 변경 없음
+
+        self._expanded = expanded
+
+        if expanded:
+            # 확장 시: wordWrap 활성화, 동적 높이 설정
+            self.setWordWrap(True)
+            # 최소 높이는 1줄 높이로 설정
+            self.setMinimumHeight(config.WIDGET_SIZES['todo_text_line_height'])
+            self.setMaximumHeight(16777215)  # 매우 큰 값으로 제한 해제
+            # Size Policy를 Preferred로 변경하여 높이가 조절되도록 함
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        else:
+            # 축소 시: wordWrap 비활성화, 22px 고정 높이
+            self.setWordWrap(False)
+            self.setFixedHeight(config.WIDGET_SIZES['todo_text_line_height'])
+            # Size Policy를 Fixed로 복원
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        # 텍스트 다시 렌더링
+        self._update_elided_text()
+
+        # 레이아웃 업데이트 요청
+        self.updateGeometry()
+        if self.parent():
+            self.parent().updateGeometry()
+
+    def is_expanded(self) -> bool:
+        """현재 확장 상태 반환.
+
+        Returns:
+            확장되어 있으면 True, 아니면 False
+        """
+        return self._expanded
+
+    def _calculate_text_height(self) -> int:
+        """전체 텍스트 표시에 필요한 높이 계산.
+
+        Returns:
+            필요한 높이 (픽셀)
+        """
+        if not self.raw_text:
+            return config.WIDGET_SIZES['todo_text_line_height']
+
+        fm = self.fontMetrics()
+
+        # 사용 가능한 너비 (현재 위젯 너비)
+        available_width = max(50, self.width() - 10)  # 최소 50px 보장
+
+        # 개행 문자를 포함한 전체 텍스트의 높이 계산
+        lines = self.raw_text.replace('\r', '').split('\n')
+        total_height = 0
+
+        for line in lines:
+            if line.strip():
+                # 텍스트가 있는 줄
+                if fm.horizontalAdvance(line) > available_width:
+                    # 너비를 넘으면 줄바꿈이 필요함
+                    # 대략적인 줄 수 계산
+                    char_width = fm.horizontalAdvance('M')  # 평균 문자 너비
+                    chars_per_line = max(1, available_width // char_width)
+                    line_count = max(1, (len(line) + chars_per_line - 1) // chars_per_line)
+                    total_height += line_count * fm.lineSpacing()
+                else:
+                    # 한 줄에 표시 가능
+                    total_height += fm.lineSpacing()
+            else:
+                # 빈 줄
+                total_height += fm.lineSpacing()
+
+        # 최소 높이 보장
+        return max(config.WIDGET_SIZES['todo_text_line_height'], total_height)
+
     def _update_elided_text(self):
         """너비에 맞게 텍스트를 elide 처리하고 HTML 변환.
 
-        텍스트가 너비를 넘으면 '...'로 표시하고,
-        전체 텍스트는 툴팁으로 보여줌.
-        개행 문자는 공백으로 치환하여 1줄로 표시.
+        확장 모드에서는 전체 텍스트를 wordWrap과 함께 표시하고,
+        축소 모드에서는 한 줄로 표시합니다.
         """
         if not self.raw_text:
             self.setText("")
             self.setToolTip("")
             return
 
-        # 개행 문자를 공백으로 치환 (1줄 표시용)
-        single_line_text = self.raw_text.replace('\n', ' ').replace('\r', ' ')
-
-        available_width = self.width() - 10
-        fm = self.fontMetrics()
-
-        # 텍스트가 넘치면 elide, 아니면 원본
-        if fm.horizontalAdvance(single_line_text) > available_width:
-            display_text = fm.elidedText(single_line_text, Qt.TextElideMode.ElideRight, available_width)
-            self.setToolTip(self.raw_text)  # 툴팁에는 원본 텍스트 (개행 포함)
+        if self._expanded:
+            # 확장 모드: 전체 텍스트 표시 (개행 유지)
+            display_text = self.raw_text
+            # 링크 파싱
+            self.links = LinkParser.parse_text(self.raw_text)
+            # HTML 변환
+            html = self._convert_to_html(display_text, self.links)
+            self.setText(html)
+            # 확장 모드에서는 툴팁 불필요
+            self.setToolTip("")
+            # 동적 높이 설정
+            if self.wordWrap():
+                # wordWrap이 활성화된 경우에만 높이 조절
+                calculated_height = self._calculate_text_height()
+                self.setMinimumHeight(calculated_height)
         else:
-            display_text = single_line_text
-            # 원본에 개행이 있으면 툴팁에 표시
-            if '\n' in self.raw_text or '\r' in self.raw_text:
-                self.setToolTip(self.raw_text)
+            # 축소 모드: 한 줄로 표시
+            # 개행 문자를 공백으로 치환 (1줄 표시용)
+            single_line_text = self.raw_text.replace('\n', ' ').replace('\r', ' ')
+
+            available_width = self.width() - 10
+            fm = self.fontMetrics()
+
+            # 텍스트가 넘치면 elide, 아니면 원본
+            if fm.horizontalAdvance(single_line_text) > available_width:
+                display_text = fm.elidedText(single_line_text, Qt.TextElideMode.ElideRight, available_width)
+                self.setToolTip(self.raw_text)  # 툴팁에는 원본 텍스트 (개행 포함)
             else:
-                self.setToolTip("")
+                display_text = single_line_text
+                # 원본에 개행이 있으면 툴팁에 표시
+                if '\n' in self.raw_text or '\r' in self.raw_text:
+                    self.setToolTip(self.raw_text)
+                else:
+                    self.setToolTip("")
 
-        # 원본 텍스트(single_line_text)에서 링크 파싱 - 원본 링크 정보 보존
-        self.links = LinkParser.parse_text(single_line_text)
+            # 원본 텍스트(single_line_text)에서 링크 파싱 - 원본 링크 정보 보존
+            self.links = LinkParser.parse_text(single_line_text)
 
-        # HTML 변환 시 display_text 사용하되, 링크는 원본 사용
-        html = self._convert_to_html(display_text, self.links)
-        self.setText(html)
+            # HTML 변환 시 display_text 사용하되, 링크는 원본 사용
+            html = self._convert_to_html(display_text, self.links)
+            self.setText(html)
 
     def resizeEvent(self, event):
         """위젯 크기 변경 시 텍스트 다시 elide 처리.

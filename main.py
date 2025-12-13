@@ -185,6 +185,9 @@ def initialize_update_services():
         from src.infrastructure.repositories.update_settings_repository import UpdateSettingsRepository
         # Application Layer
         from src.application.use_cases.check_for_updates import CheckForUpdatesUseCase
+        from src.application.use_cases.download_update import DownloadUpdateUseCase
+        from src.application.use_cases.install_update import InstallUpdateUseCase
+        from src.application.services.update_scheduler_service import UpdateSchedulerService
 
         # Infrastructure Layer 등록
         github_repo = GitHubReleaseRepository(
@@ -210,7 +213,69 @@ def initialize_update_services():
         )
         Container.register(ServiceNames.CHECK_FOR_UPDATES_USE_CASE, check_use_case)
 
-        
+        # Create simple implementations for downloader and installer
+        # These are placeholders that match the 1bf51f7 interface
+        class SimpleDownloader:
+            def download(self, url, local_path, progress_callback=None):
+                import requests
+                import shutil
+                from pathlib import Path
+                try:
+                    response = requests.get(url, stream=True)
+                    response.raise_for_status()
+
+                    total_size = int(response.headers.get('content-length', 0))
+                    downloaded = 0
+
+                    with open(local_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if progress_callback:
+                                    progress_callback(downloaded, total_size)
+                    return True
+                except Exception as e:
+                    logger.error(f"Download failed: {e}")
+                    return False
+
+        class SimpleInstaller:
+            def install_update(self, installer_path):
+                import subprocess
+                import sys
+                try:
+                    # Start new process and exit current
+                    subprocess.Popen([sys.executable, str(installer_path)],
+                                    cwd=Path(installer_path).parent)
+                    return True
+                except Exception as e:
+                    logger.error(f"Install failed: {e}")
+                    return False
+
+        downloader = SimpleDownloader()
+        Container.register(ServiceNames.UPDATE_DOWNLOADER_SERVICE, downloader)
+
+        installer = SimpleInstaller()
+        Container.register(ServiceNames.UPDATE_INSTALLER_SERVICE, installer)
+
+        download_use_case = DownloadUpdateUseCase(
+            downloader=downloader,
+            filename="SimpleTodo_new.exe"
+        )
+        Container.register(ServiceNames.DOWNLOAD_UPDATE_USE_CASE, download_use_case)
+
+        install_use_case = InstallUpdateUseCase(
+            installer=installer,
+            current_exe_path=Path(sys.executable)
+        )
+        Container.register(ServiceNames.INSTALL_UPDATE_USE_CASE, install_use_case)
+
+        scheduler = UpdateSchedulerService(
+            check_use_case=check_use_case,
+            settings_repo=settings_repo
+        )
+        Container.register(ServiceNames.UPDATE_SCHEDULER_SERVICE, scheduler)
+
         logger.info("Update services initialized successfully")
         return True
 
@@ -365,7 +430,28 @@ def main():
     # 메인 윈도우 생성 (Repository 주입)
     window = MainWindow(repository=repository)
 
-    
+    # Phase 6: UpdateManager 생성 및 주입 (선택적)
+    try:
+        from src.presentation.system.update_manager import UpdateManager
+        from src.domain.value_objects.app_version import AppVersion
+
+        update_manager = UpdateManager(
+            parent_window=window,
+            scheduler=Container.resolve(ServiceNames.UPDATE_SCHEDULER_SERVICE),
+            check_use_case=Container.resolve(ServiceNames.CHECK_FOR_UPDATES_USE_CASE),
+            download_use_case=Container.resolve(ServiceNames.DOWNLOAD_UPDATE_USE_CASE),
+            install_use_case=Container.resolve(ServiceNames.INSTALL_UPDATE_USE_CASE),
+            current_version=AppVersion.from_string(config.APP_VERSION)
+        )
+
+        # UpdateManager를 MainWindow에 설정
+        window.set_update_manager(update_manager)
+        logger.info("UpdateManager integrated successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to integrate UpdateManager: {e}")
+        logger.warning("App will continue without auto-update UI integration")
+
     # 활성화 요청 시 창 표시
     single_instance.activate_requested.connect(lambda: (window.show(), window.activateWindow(), window.raise_()))
 

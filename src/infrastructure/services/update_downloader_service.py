@@ -3,9 +3,11 @@
 
 import logging
 import tempfile
+import hashlib
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict
 import time
+import json
 
 try:
     import requests
@@ -78,7 +80,9 @@ class UpdateDownloaderService:
         self,
         url: str,
         filename: str,
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        expected_hash: Optional[str] = None,
+        expected_size: Optional[int] = None
     ) -> Optional[Path]:
         """파일을 다운로드하고 경로를 반환합니다.
 
@@ -86,6 +90,8 @@ class UpdateDownloaderService:
             url: 다운로드 URL
             filename: 저장할 파일명 (예: "SimpleTodo_new.exe")
             progress_callback: 진행률 콜백 함수 (downloaded_bytes, total_bytes)
+            expected_hash: 예상 SHA-256 해시값 (무결성 검증용)
+            expected_size: 예상 파일 크기 (무결성 검증용)
 
         Returns:
             Optional[Path]: 다운로드된 파일 경로 (실패 시 None)
@@ -96,6 +102,7 @@ class UpdateDownloaderService:
             - 디스크 공간 부족
             - 타임아웃
             - HTTP 오류 (4xx, 5xx)
+            - 파일 무결성 검증 실패
         """
         if not url or not isinstance(url, str):
             logger.error(f"유효하지 않은 URL: {url}")
@@ -121,7 +128,28 @@ class UpdateDownloaderService:
 
                 if success:
                     logger.info(f"다운로드 완료: {dest_path}")
-                    return dest_path
+
+                    # 파일 무결성 검증
+                    if expected_hash is not None or expected_size is not None:
+                        logger.info("파일 무결성 검증 중...")
+                        if self.verify_file_integrity(
+                            dest_path,
+                            expected_hash=expected_hash,
+                            expected_size=expected_size
+                        ):
+                            logger.info("무결성 검증 통과")
+                            return dest_path
+                        else:
+                            logger.error("무결성 검증 실패")
+                            # 검증 실패 시 파일 삭제
+                            dest_path.unlink(missing_ok=True)
+                            # 무결성 검증 실패는 재시도하지 않음
+                            if attempt == self.MAX_RETRIES:
+                                logger.error("파일 무결성 검증에 최종 실패")
+                                return None
+                    else:
+                        # 무결성 검증이 없는 경우 즉시 반환
+                        return dest_path
                 else:
                     logger.warning(f"다운로드 실패 (시도 {attempt}/{self.MAX_RETRIES})")
 
@@ -278,6 +306,157 @@ class UpdateDownloaderService:
         except Exception as e:
             logger.error(f"파일 검증 중 오류: {e}", exc_info=True)
             return False
+
+    def calculate_sha256(self, file_path: Path) -> Optional[str]:
+        """파일의 SHA-256 해시를 계산합니다.
+
+        Args:
+            file_path: 해시를 계산할 파일 경로
+
+        Returns:
+            Optional[str]: SHA-256 해시값 (실패 시 None)
+        """
+        if not file_path.exists():
+            logger.error(f"파일이 존재하지 않습니다: {file_path}")
+            return None
+
+        try:
+            sha256_hash = hashlib.sha256()
+
+            with open(file_path, 'rb') as f:
+                # 파일을 64KB 청크로 읽어 해시 계산
+                for chunk in iter(lambda: f.read(65536), b''):
+                    sha256_hash.update(chunk)
+
+            hash_value = sha256_hash.hexdigest()
+            logger.info(f"SHA-256 해시 계산 완료: {file_path}")
+            logger.debug(f"해시값: {hash_value}")
+
+            return hash_value
+
+        except Exception as e:
+            logger.error(f"SHA-256 해시 계산 중 오류: {e}", exc_info=True)
+            return None
+
+    def verify_file_integrity(
+        self,
+        file_path: Path,
+        expected_hash: Optional[str] = None,
+        expected_size: Optional[int] = None
+    ) -> bool:
+        """파일 무결성을 검증합니다.
+
+        Args:
+            file_path: 검증할 파일 경로
+            expected_hash: 예상 SHA-256 해시값 (None이면 검증 건너뜀)
+            expected_size: 예상 파일 크기 (None이면 검증 건너뜀)
+
+        Returns:
+            bool: 모든 검증 통과 시 True
+        """
+        if not file_path.exists():
+            logger.error(f"파일이 존재하지 않습니다: {file_path}")
+            return False
+
+        logger.info(f"파일 무결성 검증 시작: {file_path}")
+
+        # 파일 크기 검증
+        if expected_size is not None:
+            try:
+                actual_size = file_path.stat().st_size
+                if actual_size != expected_size:
+                    logger.error(
+                        f"파일 크기 불일치: {actual_size:,} != {expected_size:,} bytes"
+                    )
+                    return False
+                logger.info(f"파일 크기 검증 통과: {actual_size:,} bytes")
+            except Exception as e:
+                logger.error(f"파일 크기 확인 중 오류: {e}")
+                return False
+
+        # SHA-256 해시 검증
+        if expected_hash is not None:
+            actual_hash = self.calculate_sha256(file_path)
+            if actual_hash is None:
+                logger.error("SHA-256 해시 계산 실패")
+                return False
+
+            if actual_hash.lower() != expected_hash.lower():
+                logger.error(
+                    f"SHA-256 해시 불일치:\n"
+                    f"  실제:   {actual_hash}\n"
+                    f"  예상:   {expected_hash}"
+                )
+                return False
+
+            logger.info("SHA-256 해시 검증 통과")
+
+        logger.info("파일 무결성 검증 완료")
+        return True
+
+    def get_release_checksums(self, repo_owner: str, repo_name: str, tag: str) -> Optional[Dict[str, str]]:
+        """GitHub 릴리스에서 체크섬 정보를 가져옵니다.
+
+        Args:
+            repo_owner: 저장소 소유자 (예: 'gyh214')
+            repo_name: 저장소 이름 (예: 'simple-todo')
+            tag: 릴리스 태그 (예: 'v2.6.45')
+
+        Returns:
+            Optional[Dict[str, str]]: 파일명 -> 해시값 매핑 (실패 시 None)
+
+        Note:
+            checksums.txt 파일을 찾아 파싱합니다.
+            파일 형식: SHA256(filename) = hash
+        """
+        try:
+            # GitHub API를 통해 릴리스 정보 가져오기
+            api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/tags/{tag}"
+
+            response = requests.get(api_url, timeout=self.DOWNLOAD_TIMEOUT)
+            if response.status_code != 200:
+                logger.error(f"릴리스 정보 가져오기 실패: {response.status_code}")
+                return None
+
+            release_data = response.json()
+
+            # checksums.txt 파일 찾기
+            checksums_url = None
+            for asset in release_data.get('assets', []):
+                if asset.get('name') == 'checksums.txt':
+                    checksums_url = asset.get('browser_download_url')
+                    break
+
+            if not checksums_url:
+                logger.warning("checksums.txt 파일을 찾을 수 없습니다")
+                return None
+
+            # checksums.txt 다운로드 및 파싱
+            response = requests.get(checksums_url, timeout=self.DOWNLOAD_TIMEOUT)
+            if response.status_code != 200:
+                logger.error(f"checksums.txt 다운로드 실패: {response.status_code}")
+                return None
+
+            checksums = {}
+            for line in response.text.strip().split('\n'):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+
+                # SHA256(filename) = hash 형식 파싱
+                if 'SHA256(' in line and ') = ' in line:
+                    start = line.find('SHA256(') + 7
+                    end = line.find(') = ')
+                    filename = line[start:end]
+                    hash_value = line[end + 4:]
+                    checksums[filename] = hash_value
+
+            logger.info(f"체크섬 정보 로드 완료: {len(checksums)}개 파일")
+            return checksums
+
+        except Exception as e:
+            logger.error(f"체크섬 정보 가져오기 중 오류: {e}", exc_info=True)
+            return None
 
     def cleanup_temp_files(self):
         """임시 파일들을 정리합니다.

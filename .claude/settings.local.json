@@ -1,4 +1,13 @@
 {
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "5bab3dc016f040abb75c7650b25505a4.vQaHmm2G6u10vr7B",
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+    "API_TIMEOUT_MS": "3000000",
+    "NODE_OPTIONS": "--max-old-space-size=8192",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.6",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.6",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-4.6"
+  },
   "permissions": {
     "allow": [
       "mcp__sequential-thinking__sequentialthinking_tools",

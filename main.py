@@ -183,14 +183,8 @@ def initialize_update_services():
         # Infrastructure Layer
         from src.infrastructure.repositories.github_release_repository import GitHubReleaseRepository
         from src.infrastructure.repositories.update_settings_repository import UpdateSettingsRepository
-        from src.infrastructure.services.update_downloader_service import UpdateDownloaderService
-        from src.infrastructure.services.update_installer_service import UpdateInstallerService
-
         # Application Layer
         from src.application.use_cases.check_for_updates import CheckForUpdatesUseCase
-        from src.application.use_cases.download_update import DownloadUpdateUseCase
-        from src.application.use_cases.install_update import InstallUpdateUseCase
-        from src.application.services.update_scheduler_service import UpdateSchedulerService
 
         # Infrastructure Layer 등록
         github_repo = GitHubReleaseRepository(
@@ -202,12 +196,7 @@ def initialize_update_services():
         settings_repo = UpdateSettingsRepository(config.DATA_FILE)
         Container.register(ServiceNames.UPDATE_SETTINGS_REPOSITORY, settings_repo)
 
-        downloader = UpdateDownloaderService()
-        Container.register(ServiceNames.UPDATE_DOWNLOADER_SERVICE, downloader)
-
-        installer = UpdateInstallerService()
-        Container.register(ServiceNames.UPDATE_INSTALLER_SERVICE, installer)
-
+        
         # Application Layer 등록
         current_version = AppVersion.from_string(config.APP_VERSION)
         version_service = VersionComparisonService()
@@ -221,24 +210,7 @@ def initialize_update_services():
         )
         Container.register(ServiceNames.CHECK_FOR_UPDATES_USE_CASE, check_use_case)
 
-        download_use_case = DownloadUpdateUseCase(
-            downloader=downloader,
-            filename="SimpleTodo_new.exe"
-        )
-        Container.register(ServiceNames.DOWNLOAD_UPDATE_USE_CASE, download_use_case)
-
-        install_use_case = InstallUpdateUseCase(
-            installer=installer,
-            current_exe_path=Path(sys.executable)
-        )
-        Container.register(ServiceNames.INSTALL_UPDATE_USE_CASE, install_use_case)
-
-        scheduler = UpdateSchedulerService(
-            check_use_case=check_use_case,
-            settings_repo=settings_repo
-        )
-        Container.register(ServiceNames.UPDATE_SCHEDULER_SERVICE, scheduler)
-
+        
         logger.info("Update services initialized successfully")
         return True
 
@@ -393,36 +365,7 @@ def main():
     # 메인 윈도우 생성 (Repository 주입)
     window = MainWindow(repository=repository)
 
-    # Phase 6: UpdateManager 생성 및 주입 (선택적)
-    try:
-        from src.presentation.system.update_manager import UpdateManager
-        from src.domain.value_objects.app_version import AppVersion
-
-        update_manager = UpdateManager(
-            parent_window=window,
-            scheduler=Container.resolve(ServiceNames.UPDATE_SCHEDULER_SERVICE),
-            check_use_case=Container.resolve(ServiceNames.CHECK_FOR_UPDATES_USE_CASE),
-            download_use_case=Container.resolve(ServiceNames.DOWNLOAD_UPDATE_USE_CASE),
-            install_use_case=Container.resolve(ServiceNames.INSTALL_UPDATE_USE_CASE),
-            current_version=AppVersion.from_string(config.APP_VERSION)
-        )
-
-        # UpdateManager를 MainWindow에 설정
-        window.set_update_manager(update_manager)
-        logger.info("UpdateManager integrated successfully")
-
-    except Exception as e:
-        logger.error(f"Failed to integrate UpdateManager: {e}")
-        logger.warning("App will continue without auto-update UI integration")
-
-        # 사용자에게 알림 표시
-        QMessageBox.warning(
-            None,
-            "업데이트 기능",
-            "자동 업데이트 기능을 활성화할 수 없습니다.\n"
-            "수동으로 업데이트를 확인해주세요."
-        )
-
+    
     # 활성화 요청 시 창 표시
     single_instance.activate_requested.connect(lambda: (window.show(), window.activateWindow(), window.raise_()))
 

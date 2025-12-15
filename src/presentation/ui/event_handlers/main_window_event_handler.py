@@ -855,7 +855,7 @@ class MainWindowEventHandler:
 
         # 저장
         try:
-            self.todo_service.update_todo(todo)
+            self.todo_service.save_todo(todo)
             logger.info(f"TODO 텍스트 펼침 상태 저장: id={todo_id}, text_expanded={is_text_expanded}")
         except Exception as e:
             logger.error(f"TODO 텍스트 펼침 상태 저장 실패: id={todo_id}, error={e}")
@@ -885,7 +885,7 @@ class MainWindowEventHandler:
 
         # 저장
         try:
-            self.todo_service.update_todo(todo)
+            self.todo_service.save_todo(todo)
             logger.info(f"SubTask 텍스트 펼침 상태 저장: parent_id={parent_id}, subtask_id={subtask_id}, text_expanded={is_text_expanded}")
         except Exception as e:
             logger.error(f"SubTask 텍스트 펼침 상태 저장 실패: parent_id={parent_id}, subtask_id={subtask_id}, error={e}")

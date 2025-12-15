@@ -62,6 +62,34 @@ class TodoService:
             raise ValueError(f"Todo with id {todo_id.value} not found")
         return todo
 
+    def get_todo(self, todo_id: TodoId) -> Optional[Todo]:
+        """ID로 TODO 조회 (TodoId 객체)
+
+        Args:
+            todo_id: TODO ID (TodoId 객체)
+
+        Returns:
+            Optional[Todo]: 찾은 TODO 또는 None
+        """
+        logger.info(f"[TodoService] TODO 조회: id={todo_id.value}")
+        return self.repository.find_by_id(todo_id)
+
+    def save_todo(self, todo: Todo) -> None:
+        """TODO 객체를 그대로 저장 (전체 상태 보존)
+
+        text_expanded 등 모든 필드가 보존됩니다.
+
+        Args:
+            todo: 저장할 TODO 객체
+
+        Raises:
+            ValueError: TODO가 None인 경우
+        """
+        if todo is None:
+            raise ValueError("Todo cannot be None")
+        logger.info(f"[TodoService] TODO 저장: id={todo.id.value}")
+        self.repository.save(todo)
+
     def _load_backup_json(self, backup_path: str) -> dict:
         """백업 파일에서 JSON 데이터를 로드합니다 (공통 메서드).
 

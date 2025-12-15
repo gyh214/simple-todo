@@ -20,6 +20,8 @@ class SubTask(BaseTask):
     BaseTask의 모든 공통 메서드를 상속받습니다.
     """
 
+    text_expanded: bool = False  # 텍스트 펼침 상태
+
     @staticmethod
     def create(
         content: str,
@@ -51,6 +53,7 @@ class SubTask(BaseTask):
             created_at=created_at,
             due_date=due_date_vo,
             order=order,
+            text_expanded=False,
         )
 
     def to_dict(self) -> dict:
@@ -65,6 +68,7 @@ class SubTask(BaseTask):
             'completed': self.completed,
             'createdAt': self.created_at.isoformat(),
             'order': self.order,
+            'textExpanded': self.text_expanded,
         }
 
         # dueDate 추가 (값이 있는 경우에만)
@@ -92,6 +96,7 @@ class SubTask(BaseTask):
         created_at = datetime.fromisoformat(data['createdAt'])
         due_date = DueDate.from_string(data['dueDate']) if data.get('dueDate') else None
         order = data['order']
+        text_expanded = data.get('textExpanded', False)  # 하위호환성: 기본값 False
 
         return SubTask(
             id=subtask_id,
@@ -100,6 +105,7 @@ class SubTask(BaseTask):
             created_at=created_at,
             due_date=due_date,
             order=order,
+            text_expanded=text_expanded,
         )
 
     def __repr__(self) -> str:
@@ -111,5 +117,6 @@ class SubTask(BaseTask):
         return (
             f"SubTask(id={self.id!r}, content={self.content!r}, "
             f"completed={self.completed}, created_at={self.created_at.isoformat()}, "
-            f"due_date={self.due_date!r}, order={self.order})"
+            f"due_date={self.due_date!r}, order={self.order}, "
+            f"text_expanded={self.text_expanded})"
         )

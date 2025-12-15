@@ -30,7 +30,7 @@ BACKUP_DIR.mkdir(exist_ok=True)
 
 # 애플리케이션 기본 설정
 APP_NAME = "Simple ToDo"
-APP_VERSION = "2.7.0"
+APP_VERSION = "2.7.2"
 
 # GitHub Repository 정보 (자동 업데이트용)
 GITHUB_REPO_OWNER = "gyh214"

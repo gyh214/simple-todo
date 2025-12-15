@@ -12,6 +12,7 @@ from PyQt6.QtGui import QCursor
 import webbrowser
 import os
 import subprocess
+import re
 from typing import List, Tuple
 from ..utils.link_parser import LinkParser
 import config
@@ -35,6 +36,7 @@ class RichTextWidget(QLabel):
         """
         super().__init__(parent)
         self.raw_text = text
+        self._expanded = False  # 펼침 상태
         self.links = []
 
         # Rich Text 포맷 설정
@@ -287,42 +289,149 @@ class RichTextWidget(QLabel):
         """
         return self.links
 
+    def set_expanded(self, expanded: bool) -> None:
+        """텍스트 펼침/접힘 상태 설정.
+
+        Args:
+            expanded: True면 펼침, False면 접힘
+        """
+        if self._expanded == expanded:
+            return
+
+        self._expanded = expanded
+
+        if expanded:
+            # 펼침: 높이 자동, 줄바꿈 활성화
+            self.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
+            self.setMinimumHeight(config.WIDGET_SIZES['todo_text_line_height'])
+            self.setWordWrap(True)
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        else:
+            # 접힘: 1줄 고정
+            self.setFixedHeight(config.WIDGET_SIZES['todo_text_line_height'])
+            self.setWordWrap(False)
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        self._update_elided_text()
+
+    def _normalize_newlines(self, text: str) -> str:
+        """모든 개행문자를 \\n으로 정규화.
+
+        처리하는 패턴:
+        - <br>, <br/>, <br /> (HTML)
+        - \\r\\n (Windows)
+        - \\r (Mac Classic)
+        - \\n (Unix)
+
+        Args:
+            text: 원본 텍스트
+
+        Returns:
+            정규화된 텍스트 (\\n만 포함)
+        """
+        # <br>, <br/>, <br /> 처리
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        # \r\n -> \n, \r -> \n
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+        return text
+
+    def _convert_to_html_expanded(self, text: str, links: List[Tuple[str, str, int, int]]) -> str:
+        """펼침 모드용 HTML 변환 (개행 유지).
+
+        Args:
+            text: 정규화된 텍스트 (\\n만 포함)
+            links: 링크 리스트
+
+        Returns:
+            HTML 문자열 (개행이 <br>로 변환됨)
+        """
+        if not links:
+            # 링크 없음: 텍스트만 처리
+            escaped = self._escape_html(text)
+            return escaped.replace('\n', '<br>')
+
+        # 링크가 있는 경우: 기존 _convert_to_html 로직 재사용 후 개행 처리
+        # 먼저 개행 없이 변환 후, 개행 문자를 <br>로 치환
+        result = []
+        last_end = 0
+
+        for link_type, link_text, start, end in links:
+            # 링크 이전 텍스트
+            if start > last_end:
+                result.append(self._escape_html(text[last_end:start]).replace('\n', '<br>'))
+
+            # 링크 (개행이 링크 내에 있을 수 있음)
+            display_link = self._escape_html(link_text).replace('\n', '<br>')
+            href = f"{link_type}:{link_text}"
+
+            if link_type == 'url':
+                result.append(
+                    f'<a href="{self._escape_html(href)}" '
+                    f'style="color: #CC785C; text-decoration: underline;" '
+                    f'data-type="url">{display_link}</a>'
+                )
+            else:
+                result.append(
+                    f'<a href="{self._escape_html(href)}" '
+                    f'style="color: #CC785C; text-decoration: underline; opacity: 0.8;" '
+                    f'data-type="path">{display_link}</a>'
+                )
+
+            last_end = end
+
+        # 마지막 링크 이후 텍스트
+        if last_end < len(text):
+            result.append(self._escape_html(text[last_end:]).replace('\n', '<br>'))
+
+        return ''.join(result)
+
     def _update_elided_text(self):
         """너비에 맞게 텍스트를 elide 처리하고 HTML 변환.
 
-        텍스트가 너비를 넘으면 '...'로 표시하고,
-        전체 텍스트는 툴팁으로 보여줌.
-        개행 문자는 공백으로 치환하여 1줄로 표시.
+        펼침 모드: 개행문자를 실제 줄바꿈으로 표시
+        접힘 모드: 개행문자를 공백으로 치환하여 1줄 표시
         """
         if not self.raw_text:
             self.setText("")
             self.setToolTip("")
             return
 
-        # 개행 문자를 공백으로 치환 (1줄 표시용)
-        single_line_text = self.raw_text.replace('\n', ' ').replace('\r', ' ')
+        if self._expanded:
+            # 펼침 모드: 개행 유지
+            normalized_text = self._normalize_newlines(self.raw_text)
 
-        available_width = self.width() - 10
-        fm = self.fontMetrics()
+            # 링크 파싱 (정규화된 텍스트에서)
+            self.links = LinkParser.parse_text(normalized_text)
 
-        # 텍스트가 넘치면 elide, 아니면 원본
-        if fm.horizontalAdvance(single_line_text) > available_width:
-            display_text = fm.elidedText(single_line_text, Qt.TextElideMode.ElideRight, available_width)
-            self.setToolTip(self.raw_text)  # 툴팁에는 원본 텍스트 (개행 포함)
+            # HTML 변환 (개행을 <br>로)
+            html = self._convert_to_html_expanded(normalized_text, self.links)
+            self.setText(html)
+            self.setToolTip("")  # 펼침 모드에서는 툴팁 불필요
         else:
-            display_text = single_line_text
-            # 원본에 개행이 있으면 툴팁에 표시
-            if '\n' in self.raw_text or '\r' in self.raw_text:
-                self.setToolTip(self.raw_text)
+            # 접힘 모드: 기존 로직 (개행→공백, 1줄)
+            single_line_text = self.raw_text.replace('\n', ' ').replace('\r', ' ')
+
+            available_width = self.width() - 10
+            fm = self.fontMetrics()
+
+            # 텍스트가 넘치면 elide, 아니면 원본
+            if fm.horizontalAdvance(single_line_text) > available_width:
+                display_text = fm.elidedText(single_line_text, Qt.TextElideMode.ElideRight, available_width)
+                self.setToolTip(self.raw_text)  # 툴팁에는 원본 텍스트 (개행 포함)
             else:
-                self.setToolTip("")
+                display_text = single_line_text
+                # 원본에 개행이 있으면 툴팁에 표시
+                if '\n' in self.raw_text or '\r' in self.raw_text:
+                    self.setToolTip(self.raw_text)
+                else:
+                    self.setToolTip("")
 
-        # 원본 텍스트(single_line_text)에서 링크 파싱 - 원본 링크 정보 보존
-        self.links = LinkParser.parse_text(single_line_text)
+            # 원본 텍스트(single_line_text)에서 링크 파싱 - 원본 링크 정보 보존
+            self.links = LinkParser.parse_text(single_line_text)
 
-        # HTML 변환 시 display_text 사용하되, 링크는 원본 사용
-        html = self._convert_to_html(display_text, self.links)
-        self.setText(html)
+            # HTML 변환 시 display_text 사용하되, 링크는 원본 사용
+            html = self._convert_to_html(display_text, self.links)
+            self.setText(html)
 
     def resizeEvent(self, event):
         """위젯 크기 변경 시 텍스트 다시 elide 처리.

@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QCheckBox, QPushButton
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QMouseEvent
 import json
+import re
 
 import config
 from ...domain.entities.subtask import SubTask
@@ -38,6 +39,7 @@ class SubTaskWidget(DraggableMixin, QWidget):
     subtask_toggled = pyqtSignal(object, object)  # parent_id, subtask_id
     subtask_edit_requested = pyqtSignal(object, object)
     subtask_delete_requested = pyqtSignal(object, object)
+    text_expanded_changed = pyqtSignal(object, object, bool)  # parent_id, subtask_id, expanded
 
     def __init__(self, parent_todo_id: TodoId, subtask: SubTask, parent=None):
         """SubTaskWidget 초기화
@@ -100,6 +102,23 @@ class SubTaskWidget(DraggableMixin, QWidget):
         if self.subtask.completed:
             self.subtask_text.setProperty("completed", "true")
         content_layout.addWidget(self.subtask_text, 1)  # stretch factor = 1
+
+        # 펼침 버튼 (납기배지 앞에 배치)
+        self.expand_btn = QPushButton("▶")
+        self.expand_btn.setObjectName("subtaskExpandBtn")
+        self.expand_btn.setFixedSize(16, 16)
+        self.expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # 개행문자가 있을 때만 표시
+        if not self._has_multiline():
+            self.expand_btn.setVisible(False)
+
+        content_layout.addWidget(self.expand_btn)
+
+        # 저장된 펼침 상태 적용
+        if self.subtask.text_expanded:
+            self.expand_btn.setText("▼")
+            self.subtask_text.set_expanded(True)
 
         # SubTask 메타 정보 (납기일 배지)
         if self.subtask.due_date:
@@ -265,6 +284,18 @@ class SubTaskWidget(DraggableMixin, QWidget):
             background: {config.DUE_DATE_COLORS['normal']['bg']};
             color: {config.DUE_DATE_COLORS['normal']['color']};
         }}
+
+        QPushButton#subtaskExpandBtn {{
+            background: transparent;
+            border: none;
+            color: {config.COLORS['text_disabled']};
+            font-size: 10px;
+            padding: 0;
+        }}
+
+        QPushButton#subtaskExpandBtn:hover {{
+            color: {config.COLORS['accent']};
+        }}
         """
 
         self.setStyleSheet(style_sheet)
@@ -291,6 +322,11 @@ class SubTaskWidget(DraggableMixin, QWidget):
                 badge_opacity = QGraphicsOpacityEffect()
                 badge_opacity.setOpacity(config.OPACITY_VALUES['completed_item'])
                 self.date_badge.setGraphicsEffect(badge_opacity)
+
+            # 펼침 버튼에 opacity 적용
+            expand_opacity = QGraphicsOpacityEffect()
+            expand_opacity.setOpacity(config.OPACITY_VALUES['completed_item'])
+            self.expand_btn.setGraphicsEffect(expand_opacity)
         else:
             # 완료 해제 시 opacity 효과 제거
             self.drag_handle.setGraphicsEffect(None)
@@ -298,6 +334,7 @@ class SubTaskWidget(DraggableMixin, QWidget):
             self.subtask_text.setGraphicsEffect(None)
             if self.date_badge:
                 self.date_badge.setGraphicsEffect(None)
+            self.expand_btn.setGraphicsEffect(None)
 
     def _connect_signals(self) -> None:
         """이벤트 시그널 연결"""
@@ -306,6 +343,9 @@ class SubTaskWidget(DraggableMixin, QWidget):
 
         # 삭제 버튼 클릭
         self.delete_btn.clicked.connect(self._on_delete_clicked)
+
+        # 펼침 버튼 클릭
+        self.expand_btn.clicked.connect(self._toggle_text_expand)
 
     def _on_checkbox_toggled(self, state: Qt.CheckState) -> None:
         """체크박스 토글 이벤트 핸들러
@@ -323,6 +363,36 @@ class SubTaskWidget(DraggableMixin, QWidget):
     def _on_delete_clicked(self) -> None:
         """삭제 버튼 클릭 이벤트 핸들러"""
         self.subtask_delete_requested.emit(self.parent_todo_id, self.subtask.id)
+
+    def _toggle_text_expand(self) -> None:
+        """텍스트 펼침/접힘 토글"""
+        self.subtask.text_expanded = not self.subtask.text_expanded
+
+        # 버튼 아이콘 업데이트
+        if self.subtask.text_expanded:
+            self.expand_btn.setText("▼")
+        else:
+            self.expand_btn.setText("▶")
+
+        # RichTextWidget 펼침 상태 변경
+        self.subtask_text.set_expanded(self.subtask.text_expanded)
+
+        # 시그널 발생 (상태 저장용)
+        self.text_expanded_changed.emit(
+            self.parent_todo_id,
+            self.subtask.id,
+            self.subtask.text_expanded
+        )
+
+    def _has_multiline(self) -> bool:
+        """텍스트에 개행문자가 포함되어 있는지 확인
+
+        Returns:
+            개행문자(\n, \r) 또는 <br> 태그가 있으면 True
+        """
+        text = str(self.subtask.content)
+        # \n, \r, <br>, <br/>, <br /> 체크
+        return bool(re.search(r'[\n\r]|<br\s*/?>', text, re.IGNORECASE))
 
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
         """더블클릭 이벤트 핸들러 (편집 요청)
@@ -425,5 +495,19 @@ class SubTaskWidget(DraggableMixin, QWidget):
             if self.date_badge:
                 # 날짜 배지가 있었는데 제거된 경우
                 self.date_badge.setVisible(False)
+
+        # 펼침 버튼 가시성 업데이트
+        if self._has_multiline():
+            self.expand_btn.setVisible(True)
+        else:
+            self.expand_btn.setVisible(False)
+
+        # 펼침 상태 동기화
+        if self.subtask.text_expanded:
+            self.expand_btn.setText("▼")
+            self.subtask_text.set_expanded(True)
+        else:
+            self.expand_btn.setText("▶")
+            self.subtask_text.set_expanded(False)
 
         self._apply_styles()

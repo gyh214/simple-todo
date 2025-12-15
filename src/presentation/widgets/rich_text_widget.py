@@ -299,17 +299,19 @@ class RichTextWidget(QLabel):
             return
 
         self._expanded = expanded
+        line_height = config.WIDGET_SIZES['todo_text_line_height']
 
         if expanded:
-            # 펼침: 높이 자동, 줄바꿈 활성화
-            self.setMinimumHeight(config.WIDGET_SIZES['todo_text_line_height'])
-            self.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
+            # 펼침: 줄 수에 따라 높이 계산
+            normalized_text = self._normalize_newlines(self.raw_text)
+            line_count = max(1, normalized_text.count('\n') + 1)
+            total_height = line_count * line_height
+            self.setFixedHeight(total_height)
             self.setWordWrap(True)
-            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         else:
             # 접힘: 1줄 고정
-            self.setMinimumHeight(config.WIDGET_SIZES['todo_text_line_height'])
-            self.setMaximumHeight(config.WIDGET_SIZES['todo_text_line_height'])
+            self.setFixedHeight(line_height)
             self.setWordWrap(False)
             self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 

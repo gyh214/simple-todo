@@ -24,6 +24,7 @@ class Todo(BaseTask):
 
     subtasks: List[SubTask] = field(default_factory=list)
     recurrence: Optional[RecurrenceRule] = None
+    text_expanded: bool = False  # 텍스트 펼침 상태
 
     def set_recurrence(self, recurrence_rule: Optional[RecurrenceRule]) -> None:
         """반복 규칙을 설정합니다.
@@ -184,6 +185,7 @@ class Todo(BaseTask):
             order=order,
             subtasks=[],
             recurrence=None,
+            text_expanded=False,
         )
 
     def to_dict(self) -> dict:
@@ -199,6 +201,7 @@ class Todo(BaseTask):
             'createdAt': self.created_at.isoformat(),
             'order': self.order,
             'subtasks': [st.to_dict() for st in self.subtasks],
+            'textExpanded': self.text_expanded,
         }
 
         # dueDate 추가 (값이 있는 경우에만)
@@ -239,6 +242,9 @@ class Todo(BaseTask):
         recurrence_data = data.get('recurrence')
         recurrence = RecurrenceRule.from_dict(recurrence_data) if recurrence_data else None
 
+        # 텍스트 펼침 상태 (optional, 기본값: False, 하위호환성)
+        text_expanded = data.get('textExpanded', False)
+
         return Todo(
             id=todo_id,
             content=content,
@@ -248,6 +254,7 @@ class Todo(BaseTask):
             order=order,
             subtasks=subtasks,
             recurrence=recurrence,
+            text_expanded=text_expanded,
         )
 
     def __repr__(self) -> str:

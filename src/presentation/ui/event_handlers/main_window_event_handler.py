@@ -114,10 +114,12 @@ class MainWindowEventHandler:
         self.in_progress_section.subtask_toggled.connect(self.on_subtask_toggled)
         self.in_progress_section.subtask_edit_requested.connect(self.on_subtask_edit)
         self.in_progress_section.subtask_delete_requested.connect(self.on_subtask_delete)
+        self.in_progress_section.subtask_text_expanded_changed.connect(self._on_subtask_text_expanded_changed)
 
         self.completed_section.subtask_toggled.connect(self.on_subtask_toggled)
         self.completed_section.subtask_edit_requested.connect(self.on_subtask_edit)
         self.completed_section.subtask_delete_requested.connect(self.on_subtask_delete)
+        self.completed_section.subtask_text_expanded_changed.connect(self._on_subtask_text_expanded_changed)
 
         # 섹션: 하위 할일 순서 변경 이벤트
         self.in_progress_section.subtask_reordered_requested.connect(self.on_subtask_reordered)
@@ -129,6 +131,10 @@ class MainWindowEventHandler:
         # Phase 1: 펼침 상태 저장 시그널 연결
         self.in_progress_section.todo_expanded_changed.connect(self._on_todo_expanded_changed)
         self.completed_section.todo_expanded_changed.connect(self._on_todo_expanded_changed)
+
+        # 텍스트 펼침 상태 저장 시그널 연결
+        self.in_progress_section.todo_text_expanded_changed.connect(self._on_todo_text_expanded_changed)
+        self.completed_section.todo_text_expanded_changed.connect(self._on_todo_text_expanded_changed)
 
         # Footer: 관리 버튼 연결
         self.footer_widget.manage_clicked.connect(self._on_manage_clicked)
@@ -830,6 +836,59 @@ class MainWindowEventHandler:
         else:
             self._expanded_todos.discard(todo_id)
         logger.info(f"TODO 펼침 상태 변경: id={todo_id}, expanded={is_expanded}, total_expanded={len(self._expanded_todos)}")
+
+    def _on_todo_text_expanded_changed(self, todo_id: str, is_text_expanded: bool) -> None:
+        """TODO 텍스트 펼침 상태 변경 처리 및 저장
+
+        Args:
+            todo_id: TODO ID
+            is_text_expanded: 텍스트 펼침 상태 (True: 펼침, False: 접힘)
+        """
+        # Todo 찾기
+        todo = self.todo_service.get_todo(TodoId.from_string(todo_id))
+        if not todo:
+            logger.warning(f"TODO not found for text expand change: id={todo_id}")
+            return
+
+        # 텍스트 펼침 상태 업데이트
+        todo.text_expanded = is_text_expanded
+
+        # 저장
+        try:
+            self.todo_service.update_todo(todo)
+            logger.info(f"TODO 텍스트 펼침 상태 저장: id={todo_id}, text_expanded={is_text_expanded}")
+        except Exception as e:
+            logger.error(f"TODO 텍스트 펼침 상태 저장 실패: id={todo_id}, error={e}")
+
+    def _on_subtask_text_expanded_changed(self, parent_id, subtask_id, is_text_expanded: bool) -> None:
+        """하위 할일 텍스트 펼침 상태 변경 처리 및 저장
+
+        Args:
+            parent_id: 부모 TODO ID
+            subtask_id: 하위 할일 ID
+            is_text_expanded: 텍스트 펼침 상태 (True: 펼침, False: 접힘)
+        """
+        # 부모 Todo 찾기
+        todo = self.todo_service.get_todo(parent_id)
+        if not todo:
+            logger.warning(f"TODO not found for subtask text expand change: parent_id={parent_id}")
+            return
+
+        # SubTask 찾기
+        subtask = todo.get_subtask(subtask_id)
+        if not subtask:
+            logger.warning(f"SubTask not found: parent_id={parent_id}, subtask_id={subtask_id}")
+            return
+
+        # 텍스트 펼침 상태 업데이트
+        subtask.text_expanded = is_text_expanded
+
+        # 저장
+        try:
+            self.todo_service.update_todo(todo)
+            logger.info(f"SubTask 텍스트 펼침 상태 저장: parent_id={parent_id}, subtask_id={subtask_id}, text_expanded={is_text_expanded}")
+        except Exception as e:
+            logger.error(f"SubTask 텍스트 펼침 상태 저장 실패: parent_id={parent_id}, subtask_id={subtask_id}, error={e}")
 
     def _restore_expanded_states(self) -> None:
         """저장된 펼침 상태 복원"""

@@ -46,9 +46,13 @@ class SectionWidget(QWidget):
     subtask_toggled = pyqtSignal(object, object)  # parent_id, subtask_id
     subtask_edit_requested = pyqtSignal(object, object)
     subtask_delete_requested = pyqtSignal(object, object)
+    subtask_text_expanded_changed = pyqtSignal(object, object, bool)  # parent_id, subtask_id, expanded
 
     # 펼침 상태 변경 시그널 (Phase 1)
     todo_expanded_changed = pyqtSignal(str, bool)  # (todo_id, is_expanded)
+
+    # 텍스트 펼침 상태 변경 시그널
+    todo_text_expanded_changed = pyqtSignal(str, bool)  # (todo_id, is_text_expanded)
 
     # 하위 할일 순서 변경 시그널
     subtask_reordered_requested = pyqtSignal(str, list)  # (todo_id, new_subtask_ids)
@@ -150,9 +154,13 @@ class SectionWidget(QWidget):
         todo_item.subtask_toggled.connect(self.subtask_toggled.emit)
         todo_item.subtask_edit_requested.connect(self.subtask_edit_requested.emit)
         todo_item.subtask_delete_requested.connect(self.subtask_delete_requested.emit)
+        todo_item.subtask_text_expanded_changed.connect(self.subtask_text_expanded_changed.emit)
 
         # 펼침 상태 시그널 연결 (Phase 1)
         todo_item.expanded_changed.connect(self.todo_expanded_changed.emit)
+
+        # 텍스트 펼침 상태 시그널 연결
+        todo_item.text_expanded_changed.connect(self.todo_text_expanded_changed.emit)
 
         # 하위 할일 순서 변경 시그널 연결
         todo_item.subtask_reordered.connect(self.subtask_reordered_requested.emit)

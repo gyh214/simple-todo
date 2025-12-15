@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 from PyQt6.QtGui import QMouseEvent, QAction, QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PyQt6.QtWidgets import QMenu
 import json
+import re
 
 import config
 from ...domain.entities.todo import Todo
@@ -47,12 +48,16 @@ class TodoItemWidget(QWidget, DraggableMixin):
     subtask_toggled = pyqtSignal(object, object)  # parent_id, subtask_id
     subtask_edit_requested = pyqtSignal(object, object)
     subtask_delete_requested = pyqtSignal(object, object)
+    subtask_text_expanded_changed = pyqtSignal(object, object, bool)  # parent_id, subtask_id, expanded
 
     # 펼침 상태 변경 시그널 (Phase 1)
     expanded_changed = pyqtSignal(str, bool)  # (todo_id, is_expanded)
 
     # 하위 할일 순서 변경 시그널
     subtask_reordered = pyqtSignal(str, list)  # (todo_id, new_subtask_ids)
+
+    # 텍스트 펼침 상태 변경 시그널
+    text_expanded_changed = pyqtSignal(str, bool)  # (todo_id, is_expanded)
 
     def __init__(self, todo: Todo, parent=None):
         """TodoItemWidget 초기화
@@ -122,6 +127,11 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.todo_text.setMinimumWidth(config.LAYOUT_SIZES['todo_text_base_max_width'])  # 최소 220px
         if self.todo.completed:
             self.todo_text.setProperty("completed", "true")
+
+        # 저장된 텍스트 펼침 상태 적용
+        if self.todo.text_expanded:
+            self.todo_text.set_expanded(True)
+
         first_row_layout.addWidget(self.todo_text, 1)  # stretch
 
         # === 오른쪽 UI 컨테이너 (고정 너비 요소들을 하나로 묶음) ===
@@ -129,7 +139,20 @@ class TodoItemWidget(QWidget, DraggableMixin):
         right_widgets_layout.setSpacing(8)
         right_widgets_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 펼치기/접기 버튼 (하위 할일이 있을 때만 표시)
+        # 텍스트 펼치기/접기 버튼 (개행문자가 있을 때만 표시)
+        self.text_expand_btn = QPushButton("▶")
+        self.text_expand_btn.setObjectName("textExpandBtn")
+        self.text_expand_btn.setFixedSize(16, 16)
+        self.text_expand_btn.clicked.connect(self._toggle_text_expand)
+        if not self._has_multiline():
+            self.text_expand_btn.setVisible(False)
+        else:
+            # 저장된 펼침 상태에 따라 버튼 아이콘 설정
+            if self.todo.text_expanded:
+                self.text_expand_btn.setText("▼")
+        right_widgets_layout.addWidget(self.text_expand_btn)
+
+        # 하위 할일 펼치기/접기 버튼 (하위 할일이 있을 때만 표시)
         self.expand_btn = QPushButton("▶")
         self.expand_btn.setObjectName("expandBtn")
         self.expand_btn.setFixedSize(config.WIDGET_SIZES['expand_btn_size'],
@@ -269,7 +292,43 @@ class TodoItemWidget(QWidget, DraggableMixin):
             subtask_widget.subtask_toggled.connect(self._on_subtask_toggled)
             subtask_widget.subtask_edit_requested.connect(self._on_subtask_edit_requested)
             subtask_widget.subtask_delete_requested.connect(self._on_subtask_delete_requested)
+            subtask_widget.text_expanded_changed.connect(self._on_subtask_text_expanded_changed)
             self.subtasks_layout.addWidget(subtask_widget)
+
+    def _has_multiline(self) -> bool:
+        """텍스트에 개행문자가 포함되어 있는지 확인
+
+        Returns:
+            개행문자(\n, \r) 또는 <br> 태그가 있으면 True
+        """
+        text = str(self.todo.content)
+        # \n, \r, <br>, <br/>, <br /> 체크
+        return bool(re.search(r'[\n\r]|<br\s*/?>', text, re.IGNORECASE))
+
+    def _toggle_text_expand(self) -> None:
+        """텍스트 펼침/접힘 토글"""
+        self.todo.text_expanded = not self.todo.text_expanded
+
+        # 버튼 아이콘 업데이트
+        if self.todo.text_expanded:
+            self.text_expand_btn.setText("▼")
+        else:
+            self.text_expand_btn.setText("▶")
+
+        # RichTextWidget 펼침 상태 변경
+        self.todo_text.set_expanded(self.todo.text_expanded)
+
+        # 레이아웃 업데이트 (높이 재계산)
+        self.todo_text.adjustSize()
+        self.adjustSize()
+        self.updateGeometry()
+
+        # 부모 위젯 레이아웃 업데이트
+        if self.parent():
+            self.parent().updateGeometry()
+
+        # 시그널 발생 (상태 저장용)
+        self.text_expanded_changed.emit(str(self.todo.id), self.todo.text_expanded)
 
     def _toggle_subtasks(self) -> None:
         """하위 할일 컨테이너 펼치기/접기"""
@@ -296,6 +355,10 @@ class TodoItemWidget(QWidget, DraggableMixin):
     def _on_subtask_delete_requested(self, parent_id, subtask_id) -> None:
         """하위 할일 삭제 요청 시그널 전파"""
         self.subtask_delete_requested.emit(parent_id, subtask_id)
+
+    def _on_subtask_text_expanded_changed(self, parent_id, subtask_id, expanded) -> None:
+        """하위 할일 텍스트 펼침 상태 변경 시그널 전파"""
+        self.subtask_text_expanded_changed.emit(parent_id, subtask_id, expanded)
 
     def apply_styles(self) -> None:
         """QSS 스타일 적용 (프로토타입 정확히 재현)"""
@@ -381,6 +444,18 @@ class TodoItemWidget(QWidget, DraggableMixin):
         QPushButton#deleteBtn:hover {{
             background: rgba(244, 67, 54, 0.15);
             color: #ef5350;
+        }}
+
+        QPushButton#textExpandBtn {{
+            background: transparent;
+            border: none;
+            color: {config.COLORS['text_disabled']};
+            font-size: 10px;
+            padding: 0;
+        }}
+
+        QPushButton#textExpandBtn:hover {{
+            color: {config.COLORS['accent']};
         }}
 
         QPushButton#expandBtn {{
@@ -757,6 +832,20 @@ class TodoItemWidget(QWidget, DraggableMixin):
         # UI 업데이트
         self.todo_text.update_text(str(self.todo.content))
         self.checkbox.setChecked(self.todo.completed)
+
+        # 텍스트 펼침 버튼 가시성 업데이트
+        if self._has_multiline():
+            self.text_expand_btn.setVisible(True)
+        else:
+            self.text_expand_btn.setVisible(False)
+
+        # 텍스트 펼침 상태 동기화
+        if self.todo.text_expanded:
+            self.text_expand_btn.setText("▼")
+            self.todo_text.set_expanded(True)
+        else:
+            self.text_expand_btn.setText("▶")
+            self.todo_text.set_expanded(False)
 
         # 반복 아이콘 업데이트
         if self.todo.recurrence:

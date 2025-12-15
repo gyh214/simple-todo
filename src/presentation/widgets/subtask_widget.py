@@ -146,6 +146,10 @@ class SubTaskWidget(DraggableMixin, QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
 
+        # 펼침 시 높이 자동 확장을 위한 SizePolicy 설정
+        from PyQt6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+
     def _create_date_badge(self) -> QLabel:
         """납기일 배지 생성
 
@@ -376,6 +380,15 @@ class SubTaskWidget(DraggableMixin, QWidget):
 
         # RichTextWidget 펼침 상태 변경
         self.subtask_text.set_expanded(self.subtask.text_expanded)
+
+        # 레이아웃 업데이트 (높이 재계산)
+        self.subtask_text.adjustSize()
+        self.adjustSize()
+        self.updateGeometry()
+
+        # 부모 위젯 레이아웃 업데이트
+        if self.parent():
+            self.parent().updateGeometry()
 
         # 시그널 발생 (상태 저장용)
         self.text_expanded_changed.emit(

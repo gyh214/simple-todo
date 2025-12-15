@@ -302,17 +302,20 @@ class RichTextWidget(QLabel):
 
         if expanded:
             # 펼침: 높이 자동, 줄바꿈 활성화
-            self.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
             self.setMinimumHeight(config.WIDGET_SIZES['todo_text_line_height'])
+            self.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
             self.setWordWrap(True)
             self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         else:
             # 접힘: 1줄 고정
-            self.setFixedHeight(config.WIDGET_SIZES['todo_text_line_height'])
+            self.setMinimumHeight(config.WIDGET_SIZES['todo_text_line_height'])
+            self.setMaximumHeight(config.WIDGET_SIZES['todo_text_line_height'])
             self.setWordWrap(False)
             self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self._update_elided_text()
+        self.adjustSize()
+        self.updateGeometry()
 
     def _normalize_newlines(self, text: str) -> str:
         """모든 개행문자를 \\n으로 정규화.

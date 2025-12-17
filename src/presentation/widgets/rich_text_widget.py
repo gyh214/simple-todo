@@ -302,13 +302,12 @@ class RichTextWidget(QLabel):
         line_height = config.WIDGET_SIZES['todo_text_line_height']
 
         if expanded:
-            # 펼침: 줄 수에 따라 높이 계산
-            normalized_text = self._normalize_newlines(self.raw_text)
-            line_count = max(1, normalized_text.count('\n') + 1)
-            total_height = line_count * line_height
-            self.setFixedHeight(total_height)
+            # 펼침: 레이아웃이 자동으로 높이 결정 (WordWrap 활성화)
+            self.setFixedHeight(16777215)  # QWIDGETSIZE_MAX (제한 해제)
+            self.setMinimumHeight(0)       # 최소 높이 초기화
             self.setWordWrap(True)
-            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            # 수직 방향으로 늘어날 수 있도록 설정
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
         else:
             # 접힘: 1줄 고정
             self.setFixedHeight(line_height)

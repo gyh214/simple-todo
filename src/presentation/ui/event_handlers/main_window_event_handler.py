@@ -591,21 +591,21 @@ class MainWindowEventHandler:
                         completed_changed = new_subtask.completed != existing_subtask.completed
 
                         if content_changed or due_date_changed or completed_changed:
-                            # 내용 업데이트
+                            # 내용 업데이트 (납기일은 그대로 - 인자 생략)
                             if content_changed:
                                 self.todo_service.update_subtask(
                                     parent_todo_id=todo_id_vo,
                                     subtask_id=new_subtask.id,
-                                    content_str=str(new_subtask.content),
-                                    due_date=None
+                                    content_str=str(new_subtask.content)
+                                    # due_date 생략 -> _UNDEFINED 유지 -> 변경 안함
                                 )
-                            # 납기일 업데이트
+                            # 납기일 업데이트 (내용은 그대로 - 인자 생략)
                             if due_date_changed:
                                 self.todo_service.update_subtask(
                                     parent_todo_id=todo_id_vo,
                                     subtask_id=new_subtask.id,
-                                    content_str=None,
                                     due_date=new_subtask.due_date
+                                    # content_str 생략 -> None (기본값) -> 변경 안함
                                 )
                             # 완료 상태 업데이트
                             if completed_changed:

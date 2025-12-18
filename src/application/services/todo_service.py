@@ -18,6 +18,11 @@ from ...domain.interfaces.repository_interface import ITodoRepository
 logger = logging.getLogger(__name__)
 
 
+
+# Sentinel Object for undefined arguments
+_UNDEFINED = object()
+
+
 class TodoService:
     """Todo 비즈니스 로직을 처리하는 애플리케이션 서비스"""
 
@@ -757,7 +762,7 @@ class TodoService:
         parent_todo_id: TodoId,
         subtask_id: TodoId,
         content_str: Optional[str] = None,
-        due_date: Optional[DueDate] = None
+        due_date: Optional[DueDate] = _UNDEFINED
     ) -> None:
         """하위 할일 수정
 
@@ -765,7 +770,7 @@ class TodoService:
             parent_todo_id: 메인 할일 ID
             subtask_id: 하위 할일 ID
             content_str: 새 내용 (None이면 변경 안함)
-            due_date: 새 납기일 (None이면 변경 안함)
+            due_date: 새 납기일 (_UNDEFINED이면 변경 안함, None이면 제거)
 
         Raises:
             ValueError: Todo 또는 SubTask를 찾을 수 없는 경우
@@ -794,8 +799,8 @@ class TodoService:
             content_vo = Content(value=content_str)
             subtask.update_content(content_vo)
 
-        # 4. 납기일 수정 (있는 경우)
-        if due_date is not None:
+        # 4. 납기일 수정 (Sentinel 확인)
+        if due_date is not _UNDEFINED:
             subtask.set_due_date(due_date)
 
         # 5. Todo에 업데이트 (재정렬됨)

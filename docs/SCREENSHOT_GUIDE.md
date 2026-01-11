@@ -234,7 +234,7 @@ new-todo-panel/
 ## 🎯 완료 후
 
 1. 5개 스크린샷이 모두 저장되었는지 확인
-2. Alfred에게 "스크린샷 촬영 완료"라고 말씀
+2. 스크린샷 촬영 완료 확인
 3. README 개편 **2단계** 진행 (CONTRIBUTING.md, CHANGELOG.md, 새 README.md 작성)
 
 ---

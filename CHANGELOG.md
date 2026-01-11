@@ -39,10 +39,6 @@
 - **자동 업데이트 기능**: GitHub Releases와 연동하여 새 버전 자동 감지 및 설치
   - 백그라운드에서 정기적으로 업데이트 확인
   - 사용자 알림 및 수동 업데이트 옵션
-- **MOAI-ADK 통합**: MoAI 프로젝트 문서화 표준 적용
-  - `product.md`: 제품 개요
-  - `structure.md`: 프로젝트 구조
-  - `tech.md`: 기술 스택
 
 ### Changed
 - **아키텍처 문서화 완성**: CLEAN Architecture 설명서 완성

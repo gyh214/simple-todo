@@ -413,7 +413,6 @@ GitHub Release를 생성할 때 릴리스 노트를 작성해야 합니다. **�
 - Modified UPDATE_CHECK_INTERVAL_HOURS from 1 to 24
 - Added security section to README.md with privacy info
 - Updated CONTRIBUTING.md with release notes guidelines
-- Modified CLAUDE.md Alfred configuration
 ```
 
 #### 📋 포함해야 할 요소

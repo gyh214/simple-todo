@@ -210,7 +210,6 @@ Simple ToDo는 **개인정보 보호**와 **투명성**을 최우선으로 설�
 
 ✨ **개선사항**:
 - GitHub Releases 연동 자동 업데이트 기능 추가
-- MOAI-ADK 문서화 표준 적용
 
 👉 [전체 변경 이력](CHANGELOG.md)
 

@@ -5,7 +5,7 @@ Phase 5-3: 진행중/완료 섹션 및 분할바 구현
 docs/todo-app-ui.html의 .section 구조를 정확히 재현합니다.
 """
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QPushButton
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
 from typing import List
@@ -57,6 +57,9 @@ class SectionWidget(QWidget):
     # 하위 할일 순서 변경 시그널
     subtask_reordered_requested = pyqtSignal(str, list)  # (todo_id, new_subtask_ids)
 
+    # 새로고침 시그널
+    refresh_requested = pyqtSignal()  # 새로고침 버튼 클릭
+
     def __init__(self, title: str, parent=None):
         """SectionWidget 초기화
 
@@ -96,7 +99,16 @@ class SectionWidget(QWidget):
         self.count_label = QLabel("0")
         self.count_label.setObjectName("sectionCount")
         title_container.addWidget(self.count_label)
+
         title_container.addStretch()
+
+        # 새로고침 버튼 (진행중 섹션에만, 맨 오른쪽)
+        self.refresh_btn = None
+        if self.title == "진행중":
+            self.refresh_btn = QPushButton("새로고침")
+            self.refresh_btn.setObjectName("refreshBtn")
+            self.refresh_btn.clicked.connect(self.refresh_requested.emit)
+            title_container.addWidget(self.refresh_btn)
 
         header_layout.addLayout(title_container)
 
@@ -246,6 +258,25 @@ class SectionWidget(QWidget):
             padding: {config.UI_METRICS['padding']['xs'][0]}px {config.UI_METRICS['padding']['xs'][1]}px;
             border-radius: {config.UI_METRICS['border_radius']['md']}px;
             font-weight: 500;
+        }}
+
+        QPushButton#refreshBtn {{
+            background: rgba(64, 64, 64, 0.10);
+            color: #B0B0B0;
+            font-size: {config.FONT_SIZES['sm']}px;
+            padding: {config.UI_METRICS['padding']['sm'][0]}px {config.UI_METRICS['padding']['sm'][1]}px;
+            border-radius: {config.UI_METRICS['border_radius']['sm']}px;
+            font-weight: 500;
+            border: none;
+        }}
+
+        QPushButton#refreshBtn:hover {{
+            background: rgba(204, 120, 92, 0.35);
+            color: #FFFFFF;
+        }}
+
+        QPushButton#refreshBtn:pressed {{
+            background: rgba(204, 120, 92, 0.65);
         }}
 
         QScrollArea#sectionScrollArea {{

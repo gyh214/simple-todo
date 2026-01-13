@@ -139,6 +139,9 @@ class MainWindowEventHandler:
         # Footer: 관리 버튼 연결
         self.footer_widget.manage_clicked.connect(self._on_manage_clicked)
 
+        # 섹션: 새로고침 버튼 연결 (진행중 섹션만)
+        self.in_progress_section.refresh_requested.connect(self.on_refresh_requested)
+
     def on_splitter_moved(self, pos: int, index: int) -> None:
         """Splitter 이동 이벤트 (Throttle 100ms)
 
@@ -329,6 +332,10 @@ class MainWindowEventHandler:
 
         except Exception as e:
             logger.error(f"Failed to search todos: {e}", exc_info=True)
+
+    def on_refresh_requested(self) -> None:
+        """새로고침 버튼 클릭 핸들러 - 전체 데이터 리로드"""
+        self.load_todos()
 
     def on_add_todo(self) -> None:
         """할일 추가 핸들러 (다이얼로그 사용)"""

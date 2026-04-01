@@ -56,6 +56,9 @@ class TodoItemWidget(QWidget, DraggableMixin):
     # 하위 할일 순서 변경 시그널
     subtask_reordered = pyqtSignal(str, list)  # (todo_id, new_subtask_ids)
 
+    # 하위 할일 다른 부모로 이동 시그널
+    subtask_moved = pyqtSignal(str, str, str)  # (source_todo_id, target_todo_id, subtask_id)
+
     # 텍스트 펼침 상태 변경 시그널
     text_expanded_changed = pyqtSignal(str, bool)  # (todo_id, is_expanded)
 
@@ -219,6 +222,10 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.subtasks_container.setAcceptDrops(True)
         # 이벤트 필터 설치 (드롭 이벤트 처리)
         self.subtasks_container.installEventFilter(self)
+
+        # 메인 위젯에도 드롭 수락 (다른 부모의 하위 할일 이동용)
+        self.main_widget.setAcceptDrops(True)
+        self.main_widget.installEventFilter(self)
 
         # 하위 할일 위젯 생성
         self._populate_subtasks()
@@ -672,7 +679,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         return self.styleSheet()
 
     def eventFilter(self, obj, event):
-        """이벤트 필터 (subtasks_container의 드롭 이벤트 처리)
+        """이벤트 필터 (subtasks_container 및 main_widget의 드롭 이벤트 처리)
 
         Args:
             obj: 이벤트를 받은 객체
@@ -688,10 +695,17 @@ class TodoItemWidget(QWidget, DraggableMixin):
                 return self._handle_drag_move(event)
             elif event.type() == event.Type.Drop:
                 return self._handle_drop(event)
+        elif obj == self.main_widget:
+            if event.type() == event.Type.DragEnter:
+                return self._handle_main_drag_enter(event)
+            elif event.type() == event.Type.DragMove:
+                return self._handle_main_drag_move(event)
+            elif event.type() == event.Type.Drop:
+                return self._handle_main_drop(event)
         return super().eventFilter(obj, event)
 
     def _handle_drag_enter(self, event: QDragEnterEvent) -> bool:
-        """드래그 진입 이벤트 처리
+        """드래그 진입 이벤트 처리 (같은 부모 + 다른 부모 모두 수락)
 
         Args:
             event: 드래그 이벤트
@@ -702,8 +716,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         if event.mimeData().hasText():
             try:
                 data = json.loads(event.mimeData().text())
-                # subtask 타입이고 같은 부모 ID인지 확인
-                if data.get('type') == 'subtask' and data.get('parent_todo_id') == str(self.todo.id):
+                if data.get('type') == 'subtask':
                     event.acceptProposedAction()
                     return True
             except (json.JSONDecodeError, KeyError):
@@ -712,7 +725,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         return True
 
     def _handle_drag_move(self, event: QDragMoveEvent) -> bool:
-        """드래그 이동 이벤트 처리
+        """드래그 이동 이벤트 처리 (같은 부모 + 다른 부모 모두 수락)
 
         Args:
             event: 드래그 이벤트
@@ -723,7 +736,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         if event.mimeData().hasText():
             try:
                 data = json.loads(event.mimeData().text())
-                if data.get('type') == 'subtask' and data.get('parent_todo_id') == str(self.todo.id):
+                if data.get('type') == 'subtask':
                     event.acceptProposedAction()
                     return True
             except (json.JSONDecodeError, KeyError):
@@ -753,12 +766,15 @@ class TodoItemWidget(QWidget, DraggableMixin):
                 event.ignore()
                 return True
 
-            # 같은 부모 내에서만 순서 변경 허용
-            if data.get('parent_todo_id') != str(self.todo.id):
-                event.ignore()
-                return True
-
+            source_parent_id = data.get('parent_todo_id')
             dragged_subtask_id = data.get('subtask_id')
+
+            # 다른 부모에서 온 하위 할일 → 이동 처리
+            if source_parent_id != str(self.todo.id):
+                logger.info(f'[SubtaskMove] subtasks_container drop: subtask={dragged_subtask_id[:8]}..., from={source_parent_id[:8]}... to={str(self.todo.id)[:8]}...')
+                self.subtask_moved.emit(source_parent_id, str(self.todo.id), dragged_subtask_id)
+                event.acceptProposedAction()
+                return True
 
             # 드롭 위치 계산
             drop_pos = event.position().toPoint()
@@ -817,6 +833,65 @@ class TodoItemWidget(QWidget, DraggableMixin):
 
         # 모든 위젯보다 아래면 맨 뒤에 삽입
         return self.subtasks_layout.count()
+
+    def _handle_main_drag_enter(self, event) -> bool:
+        """메인 위젯 드래그 진입 이벤트 (다른 부모의 하위 할일 수락)"""
+        if event.mimeData().hasText():
+            try:
+                data = json.loads(event.mimeData().text())
+                if data.get('type') == 'subtask' and data.get('parent_todo_id') != str(self.todo.id):
+                    event.acceptProposedAction()
+                    return True
+            except (json.JSONDecodeError, KeyError):
+                pass
+        event.ignore()
+        return True
+
+    def _handle_main_drag_move(self, event) -> bool:
+        """메인 위젯 드래그 이동 이벤트 (다른 부모의 하위 할일 수락)"""
+        if event.mimeData().hasText():
+            try:
+                data = json.loads(event.mimeData().text())
+                if data.get('type') == 'subtask' and data.get('parent_todo_id') != str(self.todo.id):
+                    event.acceptProposedAction()
+                    return True
+            except (json.JSONDecodeError, KeyError):
+                pass
+        event.ignore()
+        return True
+
+    def _handle_main_drop(self, event) -> bool:
+        """메인 위젯 드롭 이벤트 (하위 할일을 이 메인 할일의 마지막 하위로 이동)"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if not event.mimeData().hasText():
+            event.ignore()
+            return True
+
+        try:
+            data = json.loads(event.mimeData().text())
+            if data.get('type') != 'subtask':
+                event.ignore()
+                return True
+
+            source_parent_id = data.get('parent_todo_id')
+            subtask_id = data.get('subtask_id')
+
+            # 같은 부모의 하위 할일은 main_widget에서 처리하지 않음
+            if source_parent_id == str(self.todo.id):
+                event.ignore()
+                return True
+
+            logger.info(f'[SubtaskMove] main_widget drop: subtask={subtask_id[:8]}..., from={source_parent_id[:8]}... to={str(self.todo.id)[:8]}...')
+            self.subtask_moved.emit(source_parent_id, str(self.todo.id), subtask_id)
+            event.acceptProposedAction()
+            return True
+
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f'[SubtaskMove] main_widget drop error: {e}')
+            event.ignore()
+            return True
 
     def update_todo(self, todo: Todo) -> None:
         """TODO 데이터 업데이트

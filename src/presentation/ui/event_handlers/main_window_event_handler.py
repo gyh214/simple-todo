@@ -125,6 +125,10 @@ class MainWindowEventHandler:
         self.in_progress_section.subtask_reordered_requested.connect(self.on_subtask_reordered)
         self.completed_section.subtask_reordered_requested.connect(self.on_subtask_reordered)
 
+        # 섹션: 하위 할일 다른 부모로 이동 이벤트
+        self.in_progress_section.subtask_moved_requested.connect(self.on_subtask_moved)
+        self.completed_section.subtask_moved_requested.connect(self.on_subtask_moved)
+
         # Splitter 이동
         self.splitter.splitterMoved.connect(self.on_splitter_moved)
 
@@ -826,6 +830,28 @@ class MainWindowEventHandler:
 
         except Exception as e:
             logger.error(f"Failed to reorder subtasks: {e}", exc_info=True)
+
+    def on_subtask_moved(self, source_todo_id: str, target_todo_id: str, subtask_id: str) -> None:
+        """하위 할일을 다른 메인 할일로 이동하는 핸들러
+
+        Args:
+            source_todo_id: 원본 메인 할일 ID (문자열)
+            target_todo_id: 대상 메인 할일 ID (문자열)
+            subtask_id: 이동할 하위 할일 ID (문자열)
+        """
+        try:
+            source_id = TodoId.from_string(source_todo_id)
+            target_id = TodoId.from_string(target_todo_id)
+            sub_id = TodoId.from_string(subtask_id)
+
+            self.todo_service.move_subtask(source_id, target_id, sub_id)
+            logger.info(f"Subtask moved: subtask={subtask_id[:8]}..., from={source_todo_id[:8]}... to={target_todo_id[:8]}...")
+
+            # UI 갱신
+            self.load_todos()
+
+        except Exception as e:
+            logger.error(f"Failed to move subtask: {e}", exc_info=True)
 
     # ========================================
     # Phase 1: 펼침 상태 관리

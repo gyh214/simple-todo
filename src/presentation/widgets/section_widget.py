@@ -57,6 +57,9 @@ class SectionWidget(QWidget):
     # 하위 할일 순서 변경 시그널
     subtask_reordered_requested = pyqtSignal(str, list)  # (todo_id, new_subtask_ids)
 
+    # 하위 할일 다른 부모로 이동 시그널
+    subtask_moved_requested = pyqtSignal(str, str, str)  # (source_todo_id, target_todo_id, subtask_id)
+
     # 새로고침 시그널
     refresh_requested = pyqtSignal()  # 새로고침 버튼 클릭
 
@@ -176,6 +179,9 @@ class SectionWidget(QWidget):
 
         # 하위 할일 순서 변경 시그널 연결
         todo_item.subtask_reordered.connect(self.subtask_reordered_requested.emit)
+
+        # 하위 할일 다른 부모로 이동 시그널 연결
+        todo_item.subtask_moved.connect(self.subtask_moved_requested.emit)
 
         # 레이아웃에 추가 (stretch 위에)
         self.items_layout.insertWidget(len(self.todo_items), todo_item)
@@ -355,6 +361,16 @@ class SectionWidget(QWidget):
         if not todo_id:
             event.ignore()
             return
+
+        # subtask 드래그 데이터는 무시 (JSON 형식)
+        import json
+        try:
+            data = json.loads(todo_id)
+            if isinstance(data, dict) and data.get('type') == 'subtask':
+                event.ignore()
+                return
+        except (json.JSONDecodeError, ValueError):
+            pass  # JSON이 아니면 기존 todo_id로 처리
 
         # 드롭 위치 계산
         drop_position = event.position().toPoint()

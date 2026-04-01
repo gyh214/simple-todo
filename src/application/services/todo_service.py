@@ -900,3 +900,56 @@ class TodoService:
         self.repository.save(todo)
 
         logger.info(f"[TodoService] SubTask 순서 재정렬 완료")
+
+    def move_subtask(
+        self,
+        source_todo_id: TodoId,
+        target_todo_id: TodoId,
+        subtask_id: TodoId
+    ) -> None:
+        """하위 할일을 다른 메인 할일로 이동
+
+        Args:
+            source_todo_id: 이동할 하위 할일이 속한 메인 할일 ID
+            target_todo_id: 이동 대상 메인 할일 ID
+            subtask_id: 이동할 하위 할일 ID
+
+        Raises:
+            ValueError: Todo를 찾을 수 없거나 SubTask를 찾을 수 없는 경우
+        """
+        logger.info(
+            f"[TodoService] SubTask 이동 시작: subtask_id={subtask_id.value}, "
+            f"from={source_todo_id.value}, to={target_todo_id.value}"
+        )
+
+        # source와 target이 같으면 early return
+        if source_todo_id == target_todo_id:
+            return
+
+        # 1. source_todo 조회
+        source_todo = self._get_todo_or_raise(source_todo_id)
+
+        # 2. target_todo 조회
+        target_todo = self._get_todo_or_raise(target_todo_id)
+
+        # 3. source_todo에서 subtask 가져오기
+        subtask = source_todo.get_subtask(subtask_id)
+
+        # 4. subtask가 없으면 ValueError raise
+        if subtask is None:
+            raise ValueError(f"SubTask를 찾을 수 없습니다: subtask_id={subtask_id.value}")
+
+        # 5. source_todo에서 제거
+        source_todo.remove_subtask(subtask_id)
+
+        # 6. target_todo에 추가 (자동 정렬 포함)
+        target_todo.add_subtask(subtask)
+
+        # 7. 두 todo 모두 저장
+        self.repository.save(source_todo)
+        self.repository.save(target_todo)
+
+        logger.info(
+            f"[TodoService] SubTask 이동 완료: subtask_id={subtask_id.value}, "
+            f"from={source_todo_id.value} to={target_todo_id.value}"
+        )

@@ -224,6 +224,7 @@ class TodoItemWidget(QWidget, DraggableMixin):
         self.subtasks_container.installEventFilter(self)
 
         # 메인 위젯에도 드롭 수락 (다른 부모의 하위 할일 이동용)
+        self.main_widget = main_widget
         self.main_widget.setAcceptDrops(True)
         self.main_widget.installEventFilter(self)
 
